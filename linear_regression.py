@@ -9,7 +9,6 @@ Analysis of Financial Time Series, which is further combined with SGD
 """
 
 import numpy as np
-from matplotlib import pyplot as plt
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error
@@ -47,7 +46,7 @@ def create_subsets_for_data():
         start = 0
         # Calculate end row index of each chunk (e.g. if i = 2, chunk_size = 1000, then start = 3000)
         end = (i + 1) * chunk_size if i < (
-                    no_of_chunks - 1) else n  # make sure to include the remainder in the last chunk
+                no_of_chunks - 1) else n  # make sure to include the remainder in the last chunk
         # Extract chunk of data using row slicing
         print("for subset ", i + 1, ", ", start, " = start size, ", end, " = end size")
         subset = df.iloc[start:end]
@@ -64,7 +63,12 @@ def create_subsets_for_data():
         split_dataset.append((X_train, X_test, y_train, y_test))
 
 
-# Implement linear regression model to tally benchmark scores from inspiration paper
+"""
+Implement linear regression model to tally benchmark scores from inspiration paper.
+LinearRegression() uses OLS method.
+"""
+
+
 def linear_regression_using_sklearn(splits):
     print(f"\nRunning LinearRegression() to tally benchmark scores from inspiration paper")
 
@@ -108,7 +112,7 @@ def cross_validate_on_training_data(splits, n_splits):
             X_cv_train, X_cv_val = X_train.iloc[train_index], X_train.iloc[val_index]
             y_cv_train, y_cv_val = y_train.iloc[train_index], y_train.iloc[val_index]
 
-            # Initialize and train the model
+            # Initialize and train the Linear Regression model
             model = LinearRegression()
             model.fit(X_cv_train, y_cv_train)
 
@@ -118,21 +122,22 @@ def cross_validate_on_training_data(splits, n_splits):
             mse_list.append(mse)
 
         avg_mse = np.mean(mse_list)
-        print(f"Subset {idx + 1} - Avg MSE from {n_splits}-Fold CV on Training Data: {avg_mse:.4f}")
+        print(f"Subset {idx + 1} - Avg MSE from {n_splits}-Fold CV on Training Data: {avg_mse:.4f}")  # up to 4 float pt
 
 
 # Implement linear regression with sgd to create benchmark scores for thesis
-def linear_regression_using_custom_sgd(splits, learning_rate=0.00075, epochs=5500):
+def linear_regression_using_custom_sgd(splits, learning_rate=0.001, epochs=30000):
     print(f"\nRunning Custom SGD-Based Linear Regression to tally benchmark scores from inspiration paper")
     print("learning rate:", learning_rate, "epochs:", epochs)
 
     for idx, (X_train, X_test, y_train, y_test) in enumerate(splits):
-        # Convert pandas DataFrame to numpy arrays
+        # Df has data in the form of numpy arrays under values. Convert them to numpy arrays
         X_train_np = X_train.values
         y_train_np = y_train.values
         X_test_np = X_test.values
         y_test_np = y_test.values
 
+        # set dimension of n_samples and n_features as of X_train_np
         n_samples, n_features = X_train_np.shape
 
         # Initialize weights and bias
@@ -140,12 +145,12 @@ def linear_regression_using_custom_sgd(splits, learning_rate=0.00075, epochs=550
         bias = 0
 
         # SGD training
-        for epoch in range(epochs):
-            for i in range(n_samples):
+        for epoch in range(epochs):  # for each epoch
+            for i in range(n_samples):  # for each sample
                 xi = X_train_np[i]
                 yi = y_train_np[i]
 
-                # Prediction
+                # Prediction using Linear Regression
                 y_pred = np.dot(xi, weights) + bias
 
                 # Check if prediction is nan or inf
@@ -157,17 +162,19 @@ def linear_regression_using_custom_sgd(splits, learning_rate=0.00075, epochs=550
                     break  # skip this bad sample
 
                 # Error
-                error = y_pred - yi
+                error = 2 * (y_pred - yi)
 
                 # Update rule
-                weights -= learning_rate * 2 * error * xi
-                bias -= learning_rate * 2 * error
+                weights -= learning_rate * error * xi
+                bias -= learning_rate * error
 
         # After training, predict
+        # fit to linear regression the training data, with the updated weights
         y_train_pred = np.dot(X_train_np, weights) + bias
+        # fit to linear regression the test data, with the updated weights
         y_pred = np.dot(X_test_np, weights) + bias
 
-        # Evaluate
+        # Evaluate using MSE
         mse_train = mean_squared_error(y_train_np, y_train_pred)
         mse_test = mean_squared_error(y_test_np, y_pred)
 
@@ -180,15 +187,10 @@ def linear_regression_using_custom_sgd(splits, learning_rate=0.00075, epochs=550
         print(f"Mean Squared Error for Testing Data: {mse_test:.4f}")
 
 
-# Now call the function after your split_dataset is ready
-# search_optimal_learning_rate(split_dataset, learning_rates, max_epochs=5500)
-
-
 # Call the functions
 create_subsets_for_data()
-linear_regression_using_sklearn(split_dataset)
+# linear_regression_using_sklearn(split_dataset)
 # cross_validate_on_training_data(split_dataset, no_of_chunks)
-linear_regression_using_custom_sgd(split_dataset)
-
+linear_regression_using_custom_sgd(split_dataset, 0.001, 30000)
 
 print("\nMean Close Value:", df['Close'].mean(), "and highest/lowest value:", df['Close'].max(), "&", df['Close'].min())
