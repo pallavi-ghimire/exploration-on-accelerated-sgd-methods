@@ -3,9 +3,10 @@ This file implements Linear Regression in order to set up benchmark scores for t
 Scores are compared with the paper by Singh, Gurjeet (2022) - Machine Learning Models in Stock Market Prediction
 
 Implementation of Linear Regression is done in 2 forms:
-1. Using the function LinearRegression() from sklearn.linear_model
-2. Implementing in the form of Close = w1*Open + w2*High + w3*Low + intercept, inspired from Tsay, R.S. (2010) -
-Analysis of Financial Time Series, which is further combined with SGD
+1.  Using the function LinearRegression() from sklearn.linear_model
+2.  Implementing in the form of Close = w1*Open + w2*High + w3*Low + intercept, inspired from Tsay, R.S. (2010) -
+    Analysis of Financial Time Series, which is further combined with SGD
+    as y = w1*X1 + w2*X2 + w3*X3 + b
 """
 
 import numpy as np
@@ -47,8 +48,8 @@ def create_subsets_for_data():
         # Calculate end row index of each chunk (e.g. if i = 2, chunk_size = 1000, then start = 3000)
         end = (i + 1) * chunk_size if i < (
                 no_of_chunks - 1) else n  # make sure to include the remainder in the last chunk
-        # Extract chunk of data using row slicing
         print("for subset ", i + 1, ", ", start, " = start size, ", end, " = end size")
+        # Extract chunk of data using row slicing using iloc[]
         subset = df.iloc[start:end]
         # print(subset.head(1))
 
@@ -144,6 +145,10 @@ def linear_regression_using_custom_sgd(splits, learning_rate=0.001, epochs=30000
         weights = np.zeros(n_features)
         bias = 0
 
+        # make samples random
+        indices = np.arange(n_samples)
+        np.random.shuffle(indices)
+
         # SGD training
         for epoch in range(epochs):  # for each epoch
             for i in range(n_samples):  # for each sample
@@ -161,12 +166,12 @@ def linear_regression_using_custom_sgd(splits, learning_rate=0.001, epochs=30000
                     print("bias:", bias)
                     break  # skip this bad sample
 
-                # Error
-                error = 2 * (y_pred - yi)
+                # Gradient
+                gradient = 2 * (y_pred - yi)
 
                 # Update rule
-                weights -= learning_rate * error * xi
-                bias -= learning_rate * error
+                weights -= learning_rate * gradient * xi  # y_pred = w.x
+                bias -= learning_rate * gradient
 
         # After training, predict
         # fit to linear regression the training data, with the updated weights
