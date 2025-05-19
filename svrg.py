@@ -58,7 +58,7 @@ def compute_loss(X, y, w, lambda_hyperparameter):
     residuals = X @ w - y  # @ is the matrix multiplication operator
     # np.sum() is being used to compute that summation over all data points
     # print()
-    return (1 / n) * np.sum(residuals ** 2) +  lambda_hyperparameter * np.sum(w ** 2)
+    return (1 / n) * np.sum(residuals ** 2) + lambda_hyperparameter * np.sum(w ** 2)
 
 
 def svrg_ridge_regression(X, y, lambda_hyperparameter=0.001, lr=0.01, epochs=10, m=40000):
@@ -190,50 +190,34 @@ def svrg_with_analytical_solution_comparison():
     feature_names = ['MA_10', 'MA_20', 'STD_20', 'Bollinger_Width', 'Lagged_Return_1']
     x = np.arange(len(feature_names))
 
-    plt.figure(figsize=(8, 5))
-    plt.plot(x, w_optimal, label="w_* (Closed-form)", marker='o')
-    plt.plot(x, w_svrg, label="w (SVRG)", marker='x')
-    plt.xticks(x, feature_names, rotation=45)
-    plt.ylabel("Weight Value")
-    plt.title("Comparison of w (SVRG) vs w_* (Closed-form)")
-    plt.legend()
-    plt.grid(True)
+    # Plot both comparison and optimization history
+    fig, axs = plt.subplots(2, 1, figsize=(8, 8))  # 2 rows, 1 column
+
+    # Plot 1: Weight comparison
+    axs[0].plot(x, w_optimal, label="w_* (Closed-form)", marker='o')
+    axs[0].plot(x, w_svrg, label="w (SVRG)", marker='x')
+    axs[0].set_xticks(x)
+    axs[0].set_xticklabels(feature_names, rotation=45)
+    axs[0].set_ylabel("Weight Value")
+    axs[0].set_title("Comparison of w (SVRG) vs w_* (Closed-form)")
+    axs[0].legend()
+    axs[0].grid(True)
+
+    # Plot 2: Optimization history
+    axs[1].plot(range(1, len(loss_history) + 1), loss_history, marker='o')
+    axs[1].set_xlabel("Epoch")
+    axs[1].set_ylabel("Loss")
+    axs[1].set_title("SVRG Optimization History")
+    axs[1].grid(True)
+
     plt.tight_layout()
     plt.show()
 
-
-def svrg_finite_sum():
-    return 1
 
 """ run the functions here! """
 # find_lambda_then_run_svrg()
 # get_largest_eigenvalue()
 svrg_with_analytical_solution_comparison()
-
-
-""" uncomment later """
-# Train the model
-# w_svrg, loss_history = svrg_ridge_regression(X_train, y_train, lambda_hyperparameter=0.001, lr=0.01, epochs=1, m=37286)
-# minimized_value = sum(loss_history) / len(loss_history)
-# print('The minimized value is', minimized_value)
-
-# plot the chart
-# plt.figure(figsize=(8, 5))
-# plt.plot(loss_history, marker='o')
-# plt.title("SVRG Loss History Over Epochs")
-# plt.xlabel("Epoch")
-# plt.ylabel("Ridge Regression Loss")
-# plt.grid(True)
-# plt.tight_layout()
-# plt.show()
-
-""" uncomment until here """
-
-# find mse
-# y_pred = X_test @ w_svrg
-# mse = mean_squared_error(y_test, y_pred)
-# print("MSE", mse)
-
 
 # checking data, and the value ranges (max and min), to determine whether scaling needs to be performed
 # print(spx.head())
