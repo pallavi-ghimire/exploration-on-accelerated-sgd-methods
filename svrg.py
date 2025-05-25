@@ -43,13 +43,14 @@ def get_largest_eigenvalue():
     Roughly, eta needs to be < 0.014, so selecting eta as 0.01 satisfies the given inequality
     """
     n_train = X_train.shape[0]
-    A = 2 * (X_train.T @ X_train) / n_train + 2 * 0.001 * np.eye(5)
+    A = 2 * (X_train.T @ X_train) / n_train + 2 * 0.01 * np.eye(5)
     print(A)
     eigenvalues = np.linalg.eigvals(A)
     print("\nlargest eigenvalue")
     print(np.max(eigenvalues))
 
 # print(X_train.shape, X_test.shape)
+# get_largest_eigenvalue()
 
 
 def compute_loss(X, y, w, lambda_hyperparameter):
@@ -59,6 +60,13 @@ def compute_loss(X, y, w, lambda_hyperparameter):
     # np.sum() is being used to compute that summation over all data points
     # print()
     return (1 / n) * np.sum(residuals ** 2) + lambda_hyperparameter * np.sum(w ** 2)
+
+
+def closed_form_computation(X=X_train, y=y_train, lam=0.01):
+    n, d = X.shape
+    I = np.eye(d)
+    w_closed_form = np.linalg.solve((1 / n) * X.T @ X + lam * I, (1 / n) * X.T @ y)
+    return w_closed_form
 
 
 def svrg_ridge_regression(X, y, lambda_hyperparameter=0.001, lr=0.01, epochs=10, m=40000):
@@ -72,6 +80,9 @@ def svrg_ridge_regression(X, y, lambda_hyperparameter=0.001, lr=0.01, epochs=10,
     n, d = X.shape
     w_tilde = np.zeros(d)  # initialize w~_0 as a 0's vector with dimension 1x5
     history = []  # set an array to record all the losses
+    dist_history = []
+
+    w_closed_form = closed_form_computation(X=X_train, y=y_train, lam=lambda_hyperparameter)
 
     for epoch in range(epochs):  # s loop iteration
         # numpy gives transpose of an array with .T
@@ -110,31 +121,33 @@ def svrg_ridge_regression(X, y, lambda_hyperparameter=0.001, lr=0.01, epochs=10,
         iterate as next
         snapshot """
         # assign random w_t to w~
-        rand_index = np.random.randint(0, m)
-        w_tilde = inner_iterates_w[rand_index]
+        # rand_index = np.random.randint(0, m)
+        # w_tilde = inner_iterates_w[rand_index]
 
         """option I — calculate average of it"""
-        # w_tilde = sum(inner_iterates_w) / len(inner_iterates_w)
+        w_tilde = sum(inner_iterates_w) / len(inner_iterates_w)
 
         # compute loss
         loss = compute_loss(X, y, w, lambda_hyperparameter)
+        dist = np.linalg.norm(w - w_closed_form)
+        dist_history.append(dist)
         history.append(loss)
 
-    return w, history
+    return w, history, dist_history
 
 
 def find_lambda_then_run_svrg():
     """
     Finding the best lambda value for a given learning rate of 0.01. These values are interdependent on each other,
     since the value for learning rate depends on the highest eigenvalue of the Hessian, which can be calculated as a
-    sum of 1/n(X^TX) + lambda * I
+    Hessian = sum of 1/n(X^TX) + lambda * I
     """
     lambda_values = [0.0001, 0.001, 0.01, 0.1, 1, 10]
     eta = 0.01
     results = []
 
     for l in lambda_values:
-        w, loss = svrg_ridge_regression(X_train, y_train, lambda_hyperparameter=l, lr=eta, epochs=200, m=37286)
+        w, loss, _ = svrg_ridge_regression(X_train, y_train, lambda_hyperparameter=l, lr=eta, epochs=10, m=60000)
         y_pred = X_test @ w
         mse = mean_squared_error(y_test, y_pred)
         r_mse = math.sqrt(mse)
@@ -142,33 +155,33 @@ def find_lambda_then_run_svrg():
 
     best_lambda, best_r_mse = min(results, key=lambda x: x[1])
     print(f"\nBest lambda: {best_lambda}, with R_MSE: {best_r_mse:.5f}")
-    w_svrg, loss_history = svrg_ridge_regression(X_train, y_train, lambda_hyperparameter=best_lambda, lr=eta,
-                                                 epochs=200,
-                                                 m=37286)
-
-    minimized_value = sum(loss_history) / len(loss_history)
-    print('The minimized value for the loss function is', minimized_value)
-    print('The value for w is', w_svrg)
+    # w_svrg, loss_history = svrg_ridge_regression(X_train, y_train, lambda_hyperparameter=best_lambda, lr=eta,
+    #                                              epochs=10,
+    #                                              m=60000)
+    #
+    # minimized_value = sum(loss_history) / len(loss_history)
+    # print('The minimized value for the loss function is', minimized_value)
+    # print('The value for w is', w_svrg)
 
     # plot the chart
-    plt.figure(figsize=(8, 5))
-    plt.plot(loss_history, marker='o')
-    plt.title("SVRG Loss History Over Epochs")
-    plt.xlabel("Epoch")
-    plt.ylabel("Ridge Regression Loss")
-    plt.grid(True)
-    plt.tight_layout()
-    plt.show()
-
+    # plt.figure(figsize=(8, 5))
+    # plt.plot(loss_history, marker='o')
+    # plt.title("SVRG Loss History Over Epochs")
+    # plt.xlabel("Epoch")
+    # plt.ylabel("Ridge Regression Loss")
+    # plt.grid(True)
+    # plt.tight_layout()
+    # plt.show()
+# find_lambda_then_run_svrg()
 
 def svrg_with_analytical_solution_comparison():
     eta = 0.01
-    lam = 0.001
+    lam = 0.01
     # lam = 0
 
     # Train SVRG with best lambda
 
-    w_svrg, loss_history = svrg_ridge_regression(X_train, y_train, lambda_hyperparameter=lam, lr=eta,
+    w_svrg, loss_history, dist_history = svrg_ridge_regression(X_train, y_train, lambda_hyperparameter=lam, lr=eta,
                                                  epochs=10, m=60000)
 
     minimized_value = sum(loss_history) / len(loss_history)
@@ -191,7 +204,7 @@ def svrg_with_analytical_solution_comparison():
     x = np.arange(len(feature_names))
 
     # Plot both comparison and optimization history
-    fig, axs = plt.subplots(2, 1, figsize=(8, 8))  # 2 rows, 1 column
+    fig, axs = plt.subplots(3, 1, figsize=(12, 12))  # 3 rows, 1 column
 
     # Plot 1: Weight comparison
     axs[0].plot(x, w_optimal, label="w_* (Closed-form)", marker='o')
@@ -209,6 +222,16 @@ def svrg_with_analytical_solution_comparison():
     axs[1].set_ylabel("Loss")
     axs[1].set_title("SVRG Optimization History")
     axs[1].grid(True)
+
+    """
+    Also plot ||w_t - w*||
+    """
+    # Plot 3: difference between lookahead and optimal
+    axs[2].plot(range(1, len(dist_history) + 1), dist_history, marker='o')
+    axs[1].set_xlabel("Iterations")
+    axs[2].set_ylabel("||w_s - w*||")
+    axs[2].set_title("Difference between weight at epoch s and Optimal Solution (||w_s - x*||)")
+    axs[2].grid(True)
 
     plt.tight_layout()
     plt.show()
