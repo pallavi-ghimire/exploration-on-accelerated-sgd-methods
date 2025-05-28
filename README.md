@@ -1,2 +1,2 @@
-# accelerated-sgd-in-stock-market-index
+# accelerated-sgd-methods
 Exploration on various accelerated stochastic gradient descent methods
