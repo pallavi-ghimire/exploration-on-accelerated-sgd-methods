@@ -1,5 +1,3 @@
-import cmath
-
 import numpy as np
 from matplotlib import pyplot as plt
 from sklearn.model_selection import train_test_split
@@ -59,6 +57,7 @@ def get_largest_and_smallest_eigenvalue(lam=0.1):
     alpha = 1 / L
     beta = (np.sqrt(Q) - 1) / (np.sqrt(Q) + 1)
     print("\nalpha, beta", alpha, beta)
+    print("\ncondition number Q", Q)
     return alpha, beta, Q, hessian
 
 
@@ -137,7 +136,7 @@ def asg_ridge_regression(X, y, lambda_hyperparameter=0.01, lr=0.01, beta=0.9, to
         # w_closed_form = closed_form_computation(X=X_train, y=y_train, lam=lambda_hyperparameter)
 
         # Optionally track loss every 1000 iterations
-        if t % 1000 == 0:
+        if t % 50 == 0:
             loss = compute_loss(X, y, weights, lambda_hyperparameter)
             loss_history.append(loss)
             lookahead = weights + beta * (weights - weights_prev)
@@ -199,10 +198,10 @@ def asg_with_analytical_solution_comparison():
     When alpha and beta are placed as normal (alpha=1/L or 2/L), the values diverge.
     So, smaller values are picked for alpha and beta.
     """
-    alpha = 0.001
-    beta = 0.5
+    alpha = 0.01
+    beta = 0.04
     lam = 0.01
-    iterations = 60000
+    iterations = 3000
 
     """
     Stochastic Approximation Setting params.
@@ -244,8 +243,8 @@ def asg_with_analytical_solution_comparison():
 
     print("ASG Weights:", w_asg)
     print("Closed-Form Weights", w_closed_form)
-    print(dist_history[0])
-    print(w_closed_form)
+    # print(dist_history[0])
+    # print(w_closed_form)
 
     """
         1.2 Mini Batches
@@ -263,6 +262,9 @@ def asg_with_analytical_solution_comparison():
     # w_closed_form = np.linalg.solve((1 / n) * X_train.T @ X_train + lam * I, (1 / n) * X_train.T @ y_train)
     # print("ASG Weights:", w_asg)
     # print("Closed-form Weights:", w_closed_form)
+
+    sigma = compute_sigma(X=X_train, y=y_train, w_star=w_closed_form, lambda_hyperparameter=0.01)
+    print("\nsigma", sigma)
 
     # Feature comparison
     x = np.arange(len(features))
@@ -300,6 +302,22 @@ def asg_with_analytical_solution_comparison():
     plt.show()
 
 
+def compute_sigma(X, y, w_star, lambda_hyperparameter):
+    """
+    Compute σ as the average gradient norm at the optimal solution x* (w_star)
+    in the finite-sum setting for ridge regression.
+    """
+    n = X.shape[0]
+    sigma_sum = 0.0
+    for i in range(n):
+        x_i = X[i]
+        y_i = y[i]
+        grad_i = 2 * (x_i @ w_star - y_i) * x_i + 2 * lambda_hyperparameter * w_star
+        sigma_sum += np.linalg.norm(grad_i)
+    sigma = sigma_sum / n
+    return sigma
+
+
 # Run experiments here!
 
 """
@@ -309,8 +327,9 @@ def asg_with_analytical_solution_comparison():
 4. Get largest singular value ||A||
 """
 
-lam = 0.01
-eta, b, Q, hess = get_largest_and_smallest_eigenvalue(lam=lam)
+# lambda is the largest eigenvalue
+lam = 7.02305961076089
+eta, b, Q, hess = get_largest_and_smallest_eigenvalue(lam=0.1)
 A = construct_A(hess, eta, b)
 
 """
@@ -320,8 +339,8 @@ del_lambda = C_lambda ** 2 - 4 * beta ** 2 * (beta ** 2 + 1)
 R_lambda = 1/(2 ** 0.5) * (C_lambda + del_lambda ** 0.5) ** 0.5
 assume eta = 0.001
 """
-e = 0.001
-b = 0.5
+e = 0.01
+b = 0.04
 C_lambda = (1 - e * (1 + b) * lam) ** 2 + e ** 2 * lam ** 2
 del_lambda = C_lambda ** 2 - 4 * b ** 2 * (b ** 2 + 1)
 R_lambda = 1/(2 ** 0.5) * (C_lambda + del_lambda ** 0.5) ** 0.5
@@ -342,6 +361,10 @@ singular_vals = np.linalg.svd(A, compute_uv=False)
 max_singular_value = max(singular_vals)
 print("\nlargest singular value", max_singular_value)
 
+# noise term calculation for neighborhood
+sigma = 3.6732901215682987
+noise_term = (eta * ((1 + b) ** 2 + 1) ** 0.5 * sigma) / (1 - R_lambda)
+print("\nthe neighborhood proportional to sigma", noise_term)
 
 
 # stochastic approximation

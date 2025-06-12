@@ -182,7 +182,7 @@ def svrg_with_analytical_solution_comparison():
     # Train SVRG with best lambda
 
     w_svrg, loss_history, dist_history = svrg_ridge_regression(X_train, y_train, lambda_hyperparameter=lam, lr=eta,
-                                                 epochs=10, m=60000)
+                                                 epochs=20, m=5000)
 
     minimized_value = sum(loss_history) / len(loss_history)
 
