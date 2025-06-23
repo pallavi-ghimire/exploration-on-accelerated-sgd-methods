@@ -146,50 +146,50 @@ def asg_ridge_regression(X, y, lambda_hyperparameter=0.01, lr=0.01, beta=0.9, to
     return weights, loss_history, dist_history, w_closed_form
 
 
-def asg_ridge_regression_sa(
-        X, y,
-        lambda_hyperparameter=0.001,
-        lr=0.01,
-        beta=0.9,
-        total_iterations=40000,
-        noise_std=0.05
-):
-    """
-    Accelerated Stochastic Gradient (ASG) method for ridge regression
-    in the stochastic approximation setting with additive noise
-    on the full gradient (as assumed in Theorem 1 of the paper).
-    """
-    n, d = X.shape
-    weights = np.zeros(d)
-    weights_prev = np.zeros(d)
-    loss_history = []
-
-    sigma_squared = d * (noise_std ** 2)
-    print(f"Using gradient noise variance σ² ≈ {sigma_squared:.6f}")
-
-    for t in range(total_iterations):
-        # Compute lookahead point: y_k = x_k + β(x_k - x_k-1)
-        lookahead = weights + beta * (weights - weights_prev)
-
-        # Compute full gradient at lookahead point
-        pred = X @ lookahead
-        grad_true = (2 / n) * X.T @ (pred - y) + 2 * lambda_hyperparameter * lookahead
-
-        # Add zero-mean Gaussian noise to simulate stochastic approximation
-        noise = np.random.normal(0, noise_std, size=grad_true.shape)
-        grad = grad_true + noise
-
-        # Momentum update
-        weights_prev = weights.copy()
-        weights = lookahead - lr * grad
-
-        # Track loss every 1000 iterations
-        if t % 1000 == 0:
-            loss = compute_loss(X, y, weights, lambda_hyperparameter)
-            loss_history.append(loss)
-            print(f"Iter {t}: Loss = {loss:.6f}, Grad Norm = {np.linalg.norm(grad):.4f}")
-
-    return weights, loss_history
+# def asg_ridge_regression_sa(
+#         X, y,
+#         lambda_hyperparameter=0.001,
+#         lr=0.01,
+#         beta=0.9,
+#         total_iterations=40000,
+#         noise_std=0.05
+# ):
+#     """
+#     Accelerated Stochastic Gradient (ASG) method for ridge regression
+#     in the stochastic approximation setting with additive noise
+#     on the full gradient (as assumed in Theorem 1 of the paper).
+#     """
+#     n, d = X.shape
+#     weights = np.zeros(d)
+#     weights_prev = np.zeros(d)
+#     loss_history = []
+#
+#     sigma_squared = d * (noise_std ** 2)
+#     print(f"Using gradient noise variance σ² ≈ {sigma_squared:.6f}")
+#
+#     for t in range(total_iterations):
+#         # Compute lookahead point: y_k = x_k + β(x_k - x_k-1)
+#         lookahead = weights + beta * (weights - weights_prev)
+#
+#         # Compute full gradient at lookahead point
+#         pred = X @ lookahead
+#         grad_true = (2 / n) * X.T @ (pred - y) + 2 * lambda_hyperparameter * lookahead
+#
+#         # Add zero-mean Gaussian noise to simulate stochastic approximation
+#         noise = np.random.normal(0, noise_std, size=grad_true.shape)
+#         grad = grad_true + noise
+#
+#         # Momentum update
+#         weights_prev = weights.copy()
+#         weights = lookahead - lr * grad
+#
+#         # Track loss every 1000 iterations
+#         if t % 1000 == 0:
+#             loss = compute_loss(X, y, weights, lambda_hyperparameter)
+#             loss_history.append(loss)
+#             print(f"Iter {t}: Loss = {loss:.6f}, Grad Norm = {np.linalg.norm(grad):.4f}")
+#
+#     return weights, loss_history
 
 
 def asg_with_analytical_solution_comparison():
@@ -362,7 +362,8 @@ max_singular_value = max(singular_vals)
 print("\nlargest singular value", max_singular_value)
 
 # noise term calculation for neighborhood
-sigma = 3.6732901215682987
+# sigma = 3.6732901215682987
+sigma = estimate_gradient_noise_variance(X_train, y_train)
 noise_term = (eta * ((1 + b) ** 2 + 1) ** 0.5 * sigma) / (1 - R_lambda)
 print("\nthe neighborhood proportional to sigma", noise_term)
 

@@ -28,7 +28,7 @@ asg_config = {
         "lambda": 0.01,
         "alpha": 0.01,
         "beta": 0.48,
-        "iterations": 100,
+        "iterations": 5000,
         "noise_std": 0.05,
         "batch_size": 150
     },
@@ -38,7 +38,7 @@ asg_config = {
         "beta": 0.48
     },
     "plot": {
-        "interval": 50
+        "interval": 200
     }
 }
 
