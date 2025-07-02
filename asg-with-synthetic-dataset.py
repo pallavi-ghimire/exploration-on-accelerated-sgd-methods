@@ -1,61 +1,69 @@
-# Refactored ASG Ridge Regression code with centralized configuration and synthetic data
-
-import cmath
 import numpy as np
+import pandas as pd
 from matplotlib import pyplot as plt
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
-import pandas as pd
 
-# Centralized configuration
+# --------------------------
+# Centralized Configuration
+# --------------------------
 asg_config = {
-    "features": [f"feature_{i}" for i in range(5)],
-    "target": "target",
+    "data": {
+        "file_path": "dataset/n100000_d20_mu1_L3198.csv",
+        "features": [f"x{i}" for i in range(10)],
+        "target": "y",
+    },
     "train_test_split": {
         "test_size": 0.2,
-        "random_state": 1
+        "random_state": 42,
     },
     "ridge_regression": {
         "lambda": 0.01,
-        "alpha": 0.01,
+        "alpha": 0.001,
         "beta": 0.04,
-        "iterations": 3000,
-        "noise_std": 0.05,
+        "iterations": 1000,
     },
     "spectral_analysis": {
-        "lambda_eigen": 0.1,
-        "eta": 0.01,
-        "beta": 0.04
+        "lambda_eigen": 0.01,
+        "eta": 0.001,
+        "beta": 0.04,
     },
     "plot": {
-        "interval": 50
+        "interval": 20,
     }
 }
 
-# Generate synthetic data
-np.random.seed(42)
-n_samples = 1000
-d = 5
-X = np.random.randn(n_samples, d)
-true_weights = np.array([1.5, -2.0, 0.7, 0.0, 1.0])
-y = X @ true_weights + 0.1 * np.random.randn(n_samples)  # small noise added
+# --------------------------
+# Load Dataset
+# --------------------------
+df = pd.read_csv(asg_config["data"]["file_path"])
+X = df[asg_config["data"]["features"]].values
+y = df[asg_config["data"]["target"]].values
 
+# --------------------------
+# Preprocessing
+# --------------------------
 scaler = StandardScaler()
-X_scaled = scaler.fit_transform(X)
+X_scaled = X
+# X_scaled = scaler.fit_transform(X)
+
 X_train, X_test, y_train, y_test = train_test_split(
     X_scaled, y,
     test_size=asg_config["train_test_split"]["test_size"],
     random_state=asg_config["train_test_split"]["random_state"]
 )
 
-
+# --------------------------
+# Functions
+# --------------------------
 def get_largest_and_smallest_eigenvalue(lam):
     n_train = X_train.shape[0]
     hessian = 2 * (X_train.T @ X_train) / n_train + 2 * lam * np.eye(X_train.shape[1])
-    eigenvalues = np.linalg.eigvals(hessian)
+    eigenvalues = np.linalg.eigvalsh(hessian)  # More stable for symmetric matrices
     L = np.max(eigenvalues)
     mu = np.min(eigenvalues)
     Q = L / mu
+    print("Q", Q, "L", L, "mu", mu)
     alpha = 1 / L
     beta = (np.sqrt(Q) - 1) / (np.sqrt(Q) + 1)
     return alpha, beta, Q, hessian
@@ -81,9 +89,12 @@ def compute_loss(X, y, w, lam):
 
 
 def closed_form_computation(X, y, lam):
-    n, d = X.shape
-    I = np.eye(d)
-    return np.linalg.solve((1 / n) * X.T @ X + lam * I, (1 / n) * X.T @ y)
+    # n, d = X.shape
+    # I = np.eye(d)
+    # sol = np.linalg.solve((1 / n) * X.T @ X + lam * I, (1 / n) * X.T @ y)
+    # np.savetxt("n100000_d20_mu1_L3198_sol", sol)
+    sol = np.loadtxt("dataset/n100000_d20_mu1_L3198_w_star")
+    return sol
 
 
 def asg_ridge_regression(X, y, lam, lr, beta, total_iterations):
@@ -120,6 +131,9 @@ def compute_sigma(X, y, w_star, lam):
     return np.mean([np.linalg.norm(2 * (X[i] @ w_star - y[i]) * X[i] + 2 * lam * w_star) for i in range(n)])
 
 
+# --------------------------
+# Main Function with Plotting
+# --------------------------
 def asg_with_analytical_solution_comparison():
     lam = asg_config["ridge_regression"]["lambda"]
     alpha = asg_config["ridge_regression"]["alpha"]
@@ -129,16 +143,17 @@ def asg_with_analytical_solution_comparison():
     w_asg, loss_history, dist_history, w_closed_form = asg_ridge_regression(
         X_train, y_train, lam, alpha, beta, iterations
     )
+    np.savetxt("n100000_d20_mu1_L3198_sol", w_asg)
 
     sigma = compute_sigma(X_train, y_train, w_closed_form, lam)
 
-    x = np.arange(len(asg_config["features"]))
+    x = np.arange(len(asg_config["data"]["features"]))
     fig, axs = plt.subplots(3, 1, figsize=(12, 12))
 
     axs[0].plot(x, w_closed_form, label="w_* (Closed-form)", marker='o')
     axs[0].plot(x, w_asg, label="w (ASG)", marker='x')
     axs[0].set_xticks(x)
-    axs[0].set_xticklabels(asg_config["features"], rotation=45)
+    axs[0].set_xticklabels(asg_config["data"]["features"], rotation=45)
     axs[0].set_ylabel("Weight Value")
     axs[0].set_title("Comparison of w (ASG) vs w_* (Closed-form)")
     axs[0].legend()
@@ -158,8 +173,12 @@ def asg_with_analytical_solution_comparison():
 
     plt.tight_layout()
     plt.show()
+    return sigma
 
 
+# --------------------------
+# Spectral Radius and Run
+# --------------------------
 if __name__ == "__main__":
     eta, b, Q, hess = get_largest_and_smallest_eigenvalue(asg_config["spectral_analysis"]["lambda_eigen"])
     A = construct_A(hess, eta, b)
@@ -172,16 +191,14 @@ if __name__ == "__main__":
     del_lambda = C_lambda ** 2 - 4 * b ** 2 * (b ** 2 + 1)
     R_lambda = 1 / (2 ** 0.5) * (C_lambda + del_lambda ** 0.5) ** 0.5
 
-    print("C_lambda, del_lambda, R_lambda", C_lambda, del_lambda, R_lambda)
-    print("valid value!" if abs(R_lambda) < 1 else "value greater!")
+    print("C_lambda, del_lambda, R_lambda:", C_lambda, del_lambda, R_lambda)
+    print("Valid spectral radius!" if abs(R_lambda) < 1 else "Spectral radius too large!")
 
     rho = max(abs(np.linalg.eigvals(A)))
     print("\nSpectral radius ρ(A):", rho)
     max_singular_value = max(np.linalg.svd(A, compute_uv=False))
-    print("\nlargest singular value", max_singular_value)
+    print("\nLargest singular value:", max_singular_value)
 
-    sigma = 3.6732901215682987
+    sigma = asg_with_analytical_solution_comparison()
     noise_term = (eta * ((1 + b) ** 2 + 1) ** 0.5 * sigma) / (1 - R_lambda)
-    print("\nthe neighborhood proportional to sigma", noise_term)
-
-    asg_with_analytical_solution_comparison()
+    print("\nThe noise neighborhood proportional to sigma:", noise_term)

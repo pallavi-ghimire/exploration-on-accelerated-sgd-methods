@@ -66,7 +66,9 @@ def get_largest_and_smallest_eigenvalue(lam):
     L = np.max(eigenvalues)
     print("L is", L)
     mu = np.min(eigenvalues)
+    print("mu is", mu)
     Q = L / mu
+    print("Q is", Q)
     alpha = 1 / L
     beta = (np.sqrt(Q) - 1) / (np.sqrt(Q) + 1)
     return alpha, beta, Q, hessian
@@ -226,6 +228,12 @@ def asg_ridge_regression_minibatch(X, y, lam, lr, beta, total_iterations, w_clos
         # Lookahead point: y_k+1 = x_k + beta(x_k - x_k-1)
         lookahead = weights + beta * (weights - weights_prev)
 
+        if k == 1:
+            print("y_1", lookahead)
+
+        if k == total_iterations - 1:
+            print("y_k+1", lookahead)
+
         # Stochastic gradient at lookahead: g_k+1 = 1/m * sum(gradient f_i(y_k+1))
         # g_k+1 = 2*X_batch^T*(X_batch*y_k - y_batch) / batch_size + 2*lambda*lookahead
         grad = 2 * X_batch.T @ (X_batch @ lookahead - y_batch) / batch_size + 2 * lam * lookahead
@@ -322,6 +330,8 @@ where,
 R_lambda = (1/2^n) * sqrt((C_lambda + sqrt(del_lambda))),
 C_lambda = 1 - eta * (1+b) * lambda
 del_lambda = C_lambda^2 - 4*(b^2) + (b^2 + 1)
+
+sigma was calculated to be 3.673290121568296
 """
 
 # minibatch
