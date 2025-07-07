@@ -10,7 +10,7 @@ from sklearn.preprocessing import StandardScaler
 svrg_config = {
     "data": {
         "file_path": "dataset/n100000_d20_mu1_L3198.csv",
-        "features": [f"x{i}" for i in range(10)],
+        "features": [f"x{i}" for i in range(50)],
         "target": "y",
     },
     "train_test_split": {
@@ -74,6 +74,43 @@ def closed_form_computation():
     sol = np.loadtxt("dataset/n100000_d20_mu1_L3198_w_star")
     return sol
 
+def get_largest_and_smallest_eigenvalue(lam, w_0, w_k, w_opt):
+    n_train = X_train.shape[0]
+    d = X_train.shape[1]
+
+    # Hessian of the ridge regression loss
+    hessian = 2 * (X_train.T @ X_train) / n_train + 2 * lam * np.eye(d)
+    eigenvalues = np.linalg.eigvals(hessian)
+    L = np.max(eigenvalues)    # Smoothness constant
+    mu = np.min(eigenvalues)   # Strong convexity constant
+    Q = L / mu                 # Condition number
+    alpha = 1 / L              # Ideal learning rate
+
+    eta = svrg_config["ridge_regression"]["lr"]
+    m = svrg_config["ridge_regression"]["m"]
+    k = svrg_config["ridge_regression"]["epochs"]
+
+    # Convergence rate constant phi (as derived from SVRG analysis)
+    phi = Q / (m * (1 - 2 * L * eta)) + (2 * L * eta) / (1 - 2 * L * eta)
+
+    # Loss function
+    def P(w):
+        return compute_loss(X_train, y_train, w, lam)
+
+    # Convergence bound for function value
+    expectation_bound = phi ** k * (P(w_0) - P(w_opt))
+
+    expectation_with = P(w_k) - P(w_opt)
+
+    print(f"L = {L:.5f}")
+    print(f"mu = {mu:.5f}")
+    print(f"Q = {Q:.5f}")
+    print(f"alpha (1/L) = {alpha:.5f}")
+    print(f"phi = {phi:.5f}")
+    print(f"phi^k * (P(w_0) - P(w_*)) {k} epochs: {expectation_bound:.25e}")
+    print(f"E[P(w_k)] - E[P(w_*)]): {expectation_with:.25e}")
+
+    return alpha, Q, hessian
 
 def svrg_ridge_regression(X, y, lam, lr, epochs, m):
     n, d = X.shape
@@ -89,6 +126,13 @@ def svrg_ridge_regression(X, y, lam, lr, epochs, m):
         w = w_tilde.copy()
 
         inner_iterates_w = []
+
+        if epoch == 0:
+            print("w_0", w)
+            w_0 = w
+
+        if epoch == epochs - 1:
+            print("w_k+1", w)
 
         for t in range(m):
             i = np.random.randint(0, n)
@@ -120,7 +164,7 @@ def svrg_ridge_regression(X, y, lam, lr, epochs, m):
     w_unscaled = w / scaler.scale_
     w_closed_unscaled = w_closed  # Already in unscaled space
 
-    return w_unscaled, loss_history, dist_history, w_closed_unscaled
+    return w_unscaled, loss_history, dist_history, w_closed_unscaled, w_0
 
 
 def compute_sigma(X, y, w_star, lam):
@@ -140,11 +184,14 @@ def svrg_with_analytical_solution_comparison():
     epochs = svrg_config["ridge_regression"]["epochs"]
     m = svrg_config["ridge_regression"]["m"]
 
-    w, loss_history, dist_history, w_closed = svrg_ridge_regression(
+    w, loss_history, dist_history, w_closed, w_0 = svrg_ridge_regression(
         X_train, y_train, lam, lr, epochs, m
     )
+    get_largest_and_smallest_eigenvalue(lam=lam, w_0=w_0, w_k=w, w_opt=w_0)
 
     sigma = compute_sigma(X_train, y_train, w_closed, lam)
+
+    print("Final Loss:", loss_history[-1])
 
     x = np.arange(len(svrg_config["data"]["features"]))
     fig, axs = plt.subplots(3, 1, figsize=(12, 12))
@@ -176,10 +223,57 @@ def svrg_with_analytical_solution_comparison():
     return sigma
 
 
+def estimate_flops_closed_form_and_svrg(n, d, T_svrg, m, lam=0.01):
+    """
+    Estimate FLOPs for:
+    - Closed-form ridge regression
+    - SVRG for ridge regression
+
+    Parameters:
+        n (int): Number of training samples
+        d (int): Number of features
+        T_svrg (int): Number of outer epochs in SVRG
+        m (int): Number of inner steps per epoch
+        lam (float): Regularization strength (used only for naming clarity)
+
+    Returns:
+        dict: Estimated FLOPs for both methods
+    """
+    # === Closed-form ===
+    # FLOPs: 2nd^2 + 2nd + 2d^2 + (2/3)d^3
+    flops_closed_form = 2 * n * d**2 + 2 * n * d + 2 * d**2 + (2 / 3) * d**3
+
+    # === SVRG ===
+    # For each epoch:
+    #   Full gradient: X @ w_tilde → 2nd
+    #   Then X.T @ (...) → 2nd
+    #   Regularization term: 2d
+    flops_full_gradient = (T_svrg - 1) * (2 * n * d + 2 * n * d + 2 * d)
+
+    # Inner loop:
+    # Each inner iteration (m steps per epoch):
+    #   - grad_i: x_i.T @ (x_i @ w - y_i) → 2d
+    #   - grad_i_tilde: same → 2d
+    #   - regularization terms: 2d
+    #   - final update (subtract scaled gradient): 2d
+    flops_per_inner_iter = 2 * d + 2 * d + 2 * d + 2 * d  # = 8d
+    flops_inner_loop = (T_svrg - 1) * m * flops_per_inner_iter
+
+    # Total SVRG FLOPs
+    flops_svrg = flops_full_gradient + flops_inner_loop
+
+    return {
+        "closed_form_flops": int(flops_closed_form),
+        "svrg_flops": int(flops_svrg)
+    }
+
+print(estimate_flops_closed_form_and_svrg(n=80000, d=50, T_svrg=svrg_config["ridge_regression"]["epochs"], m=svrg_config["ridge_regression"]["m"], lam = svrg_config["ridge_regression"]["lambda"]))
+
+
 # --------------------------
 # Run
 # --------------------------
 if __name__ == "__main__":
     L = get_largest_eigenvalue(svrg_config["spectral_analysis"]["lambda_eigen"])
     sigma = svrg_with_analytical_solution_comparison()
-    print("Sigma (gradient noise):", sigma)
+    # print("Sigma (gradient noise):", sigma)

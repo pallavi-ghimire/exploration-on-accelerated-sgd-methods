@@ -28,9 +28,9 @@ asg_config = {
         "lambda": 0.01,
         "alpha": 0.01,
         "beta": 0.48,
-        "iterations": 5000,
+        "iterations": 2000,
         "noise_std": 0.05,
-        "batch_size": 150
+        "batch_size": 100
     },
     "spectral_analysis": {
         "lambda_eigen": 0.01,
@@ -38,7 +38,7 @@ asg_config = {
         "beta": 0.48
     },
     "plot": {
-        "interval": 200
+        "interval": 50
     }
 }
 
@@ -143,6 +143,82 @@ def compute_noise_term(sigma, eta, beta, R_lambda):
     return noise_term
 
 
+def get_asg_convergence_properties(lam, w_0, w_k, w_opt, alpha, beta):
+    """
+    Compute ASG-specific spectral properties and convergence estimates.
+
+    Parameters:
+        lam (float): Ridge regularization parameter
+        w_0 (np.ndarray): Initial weights
+        w_k (np.ndarray): Final weights from ASG
+        w_opt (np.ndarray): Closed-form optimal solution
+        alpha (float): Step size (learning rate)
+        beta (float): Momentum parameter
+
+    Returns:
+        tuple: (rho, alpha, beta, C_lambda, R_lambda)
+    """
+    n_train = X_train.shape[0]
+    d = X_train.shape[1]
+
+    # A = construct_A(hess, alpha, b)
+    # lam = max(np.linalg.eigvals(A))
+
+    # Hessian of the ridge regression loss
+    H = 2 * (X_train.T @ X_train) / n_train + 2 * lam * np.eye(d)
+
+    # Construct system matrix A based on Nesterov-style ASG updates
+    A = construct_A(H, alpha, beta)
+
+    # Compute L, mu, Q
+    eigenvalues = np.linalg.eigvals(H)
+    L = np.max(eigenvalues)
+    mu = np.min(eigenvalues)
+    Q = L / mu
+
+    # compute values for R_lambda
+    eta = asg_config["spectral_analysis"]["eta"]
+    b = asg_config["spectral_analysis"]["beta"]
+    _, _, Q, hess = get_largest_and_smallest_eigenvalue(asg_config["spectral_analysis"]["lambda_eigen"])
+    A = construct_A(hess, eta, b)
+    l_for_r = max(np.linalg.eigvals(A))
+
+    # Spectral radius and singular value
+    rho = max(abs(np.linalg.eigvals(A)))
+    max_singular = max(np.linalg.svd(A, compute_uv=False))
+
+    # C_lambda and R_lambda (for bounding noise neighborhood)
+    C_lambda = (1 - alpha * (1 + beta) * l_for_r) ** 2 + alpha ** 2 * l_for_r ** 2
+    delta_lambda = C_lambda ** 2 - 4 * beta ** 2 * ((1 - alpha * l_for_r) ** 2)
+
+    if delta_lambda < 0:
+        R_lambda = np.nan
+    else:
+        R_lambda = (1 / np.sqrt(2)) * np.sqrt(C_lambda + np.sqrt(delta_lambda))
+
+    # Loss function
+    def P(w): return compute_loss(X_train, y_train, w, lam)
+
+    sigma = compute_sigma(X_train, y_train, closed_form_value, asg_config["ridge_regression_minibatch"]["lambda"], b)
+    print("sigma =", sigma)
+
+    LHS = P(w_k) - P(w_opt)
+    k = asg_config["ridge_regression_minibatch"]["iterations"]
+    RHS = L * ((alpha ** 2) * ((((1 + beta) ** 2) + 1) ** 2) * (sigma ** 2)) / 2 * (1 - (R_lambda ** 2))
+    # Print diagnostic information
+    print(f"L = {L:.5f}, mu = {mu:.5f}, Q = {Q:.5f}")
+    print(f"alpha = {alpha:.5f}, beta = {beta:.5f}")
+    print(f"rho (spectral radius of A) = {rho:.5f}")
+    print(f"max singular value of A = {max_singular:.5f}")
+    print(f"C_lambda = {C_lambda:.5f}")
+    print(f"delta_lambda = {delta_lambda:.5f}")
+    print(f"R_lambda = {R_lambda:.5f}")
+    print("LHS = ", LHS)
+    print("RHS = ", RHS)
+
+    return alpha, beta, Q, R_lambda, rho, C_lambda
+
+
 def asg_with_analytical_solution_comparison(w_closed_form):
     lam = asg_config["ridge_regression"]["lambda"]
     alpha = asg_config["ridge_regression"]["alpha"]
@@ -228,8 +304,9 @@ def asg_ridge_regression_minibatch(X, y, lam, lr, beta, total_iterations, w_clos
         # Lookahead point: y_k+1 = x_k + beta(x_k - x_k-1)
         lookahead = weights + beta * (weights - weights_prev)
 
-        if k == 1:
+        if k == 0:
             print("y_1", lookahead)
+            y_1 = lookahead
 
         if k == total_iterations - 1:
             print("y_k+1", lookahead)
@@ -251,7 +328,7 @@ def asg_ridge_regression_minibatch(X, y, lam, lr, beta, total_iterations, w_clos
             dist_history.append(dist)
 
     print("optimized weights (minibatch)", weights)
-    return weights, loss_history, dist_history
+    return weights, loss_history, dist_history, y_1
 
 
 def asg_minibatch_comparison(w_closed_form, batch_size=32):
@@ -260,10 +337,11 @@ def asg_minibatch_comparison(w_closed_form, batch_size=32):
     beta = asg_config["ridge_regression_minibatch"]["beta"]
     iterations = asg_config["ridge_regression_minibatch"]["iterations"]
 
-    w_asg_mb, loss_history, dist_history = asg_ridge_regression_minibatch(
+    w_asg_mb, loss_history, dist_history, y_1 = asg_ridge_regression_minibatch(
         X_train, y_train, lam, alpha, beta, iterations, w_closed_form, batch_size=batch_size
     )
 
+    get_asg_convergence_properties(lam=lam, w_0=y_1, w_k=w_asg_mb, w_opt=w_closed_form, alpha=alpha, beta=beta)
     x = np.arange(len(asg_config["features"]))
     fig, axs = plt.subplots(3, 1, figsize=(12, 12))
 
@@ -366,6 +444,47 @@ print("sigma =", sigma)
 asg_minibatch_comparison(
     w_closed_form=closed_form_computation(X_train, y_train, asg_config["ridge_regression_minibatch"]["lambda"]),
     batch_size=asg_config["ridge_regression_minibatch"]["batch_size"])
+
+
+def estimate_flops_closed_form_and_asg_minibatch(n, d, T_asg, batch_size):
+    """
+    Estimate FLOPs for:
+    - Closed-form ridge regression
+    - ASG ridge regression with minibatching
+
+    Parameters:
+        n (int): Number of training samples
+        d (int): Number of features
+        T_asg (int): Number of ASG iterations
+        batch_size (int): Mini-batch size used per iteration
+
+    Returns:
+        dict: Estimated FLOPs for closed-form and ASG minibatch
+    """
+    # === Closed-form ===
+    # 2nd^2 + 2nd + 2d^2 + (2/3)d^3
+    flops_closed_form = 2 * n * d**2 + 2 * n * d + 2 * d**2 + (2 / 3) * d**3
+
+    # === ASG Minibatch ===
+    # Each iteration:
+    # - lookahead: weights + beta * (weights - weights_prev) → 2d
+    # - X_batch @ lookahead → 2 * batch_size * d
+    # - X_batch.T @ (X_batch @ lookahead - y_batch) → 2 * batch_size * d
+    # - regularization: 2d
+    # - update: weights = lookahead - lr * grad → 2d
+    #
+    # Total per iteration:
+    # ≈ 4 * batch_size * d (matrix ops) + 6d (lookahead + reg + update)
+    flops_per_iter = 4 * batch_size * d + 6 * d
+    flops_asg_minibatch = T_asg * flops_per_iter
+
+    return {
+        "closed_form_flops": int(flops_closed_form),
+        "asg_minibatch_flops": int(flops_asg_minibatch)
+    }
+
+
+print(estimate_flops_closed_form_and_asg_minibatch(n=18658, d=5, T_asg=asg_config["ridge_regression_minibatch"]["iterations"], batch_size=asg_config["ridge_regression_minibatch"]["batch_size"]))
 
 
 # def generate_valid_pareto_front(
@@ -493,7 +612,7 @@ def generate_valid_pareto_front(
 
                         if np.isrealobj(R_lambda) and not np.isnan(R_lambda) and R_lambda < 1:
                             print("R_lambda is", R_lambda, "for valid alpha-beta pair: ", alpha, "and", beta)
-                            weights, loss_history, dist_history = asg_ridge_regression_minibatch(
+                            weights, loss_history, dist_history, _ = asg_ridge_regression_minibatch(
                                 X_train, y_train,
                                 lam=lam,
                                 lr=alpha,

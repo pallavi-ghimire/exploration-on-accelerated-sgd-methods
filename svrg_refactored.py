@@ -1,16 +1,13 @@
-# svrg_configured_runner.py
-
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 import math
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
-from sklearn.datasets import make_regression
+from sklearn.metrics import mean_squared_error
+from matplotlib import pyplot as plt
 
-# Central configuration
+# Configuration dictionary
 svrg_config = {
-    "mode": "real",  # Options: "real", "synthetic"
     "dataset_path": "dataset/SPX_clean.csv",
     "features": ['MA_10', 'MA_20', 'STD_20', 'Bollinger_Width', 'Lagged_Return_1'],
     "target": "Z_Score",
@@ -20,137 +17,304 @@ svrg_config = {
     },
     "svrg": {
         "lambda": 0.01,
-        "learning_rate": 0.01,
-        "epochs": 20,
-        "inner_iterations": 60000
+        "lr": 0.01,
+        "epochs": 10,
+        "m": 2000,
     }
 }
 
-def prepare_data(X, y, scale=True):
-    if scale:
-        scaler = StandardScaler()
-        X_scaled = scaler.fit_transform(X)
-    else:
-        X_scaled = X
-    return train_test_split(X_scaled, y,
-        test_size=svrg_config["train_test_split"]["test_size"],
-        random_state=svrg_config["train_test_split"]["random_state"]
-    )
+# Load and preprocess data
+df = pd.read_csv(svrg_config["dataset_path"])
+df['Date'] = pd.to_datetime(df['Date'])
+df = df.sort_values('Date').dropna().reset_index(drop=True)
+
+X = df[svrg_config["features"]].values
+y = df[svrg_config["target"]].values
+
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X_scaled, y,
+    test_size=svrg_config["train_test_split"]["test_size"],
+    random_state=svrg_config["train_test_split"]["random_state"]
+)
+
 
 def compute_loss(X, y, w, lam):
     n = len(y)
-    residuals = X @ w - y
-    return (1 / n) * np.sum(residuals ** 2) + lam * np.sum(w ** 2)
+    return (1 / n) * np.sum((X @ w - y) ** 2) + lam * np.sum(w ** 2)
 
-def closed_form_computation(X, y, lam=0.01):
+
+def closed_form_solution(X, y, lam):
     n, d = X.shape
     I = np.eye(d)
     return np.linalg.solve((1 / n) * X.T @ X + lam * I, (1 / n) * X.T @ y)
 
-def svrg_ridge_regression(X, y, lam, lr, epochs, m):
+
+def svrg_ridge_regression(X, y, lam, lr, epochs, m, w_star):
     n, d = X.shape
     w_tilde = np.zeros(d)
-    history = []
+    loss_history = []
     dist_history = []
-    w_star = closed_form_computation(X, y, lam)
 
     for epoch in range(epochs):
         full_grad = (2 / n) * X.T @ (X @ w_tilde - y) + 2 * lam * w_tilde
         w = w_tilde.copy()
-        inner_ws = []
+        inner_iterates_w = []
 
-        for _ in range(m):
+        if epoch == 0:
+            print("w_0", w)
+            w_0 = w
+
+        if epoch == epochs - 1:
+            print("w_k+1", w)
+
+        for t in range(m):
             i = np.random.randint(0, n)
             x_i = X[i].reshape(1, -1)
             y_i = y[i]
 
             grad_i = 2 * x_i.T @ (x_i @ w - y_i) + 2 * lam * w
             grad_i_tilde = 2 * x_i.T @ (x_i @ w_tilde - y_i) + 2 * lam * w_tilde
-
             w -= lr * (grad_i - grad_i_tilde + full_grad)
-            inner_ws.append(w.copy())
+            inner_iterates_w.append(w.copy())
 
-        w_tilde = sum(inner_ws) / len(inner_ws)
+        w_tilde = np.mean(inner_iterates_w, axis=0)
         loss = compute_loss(X, y, w, lam)
         dist = np.linalg.norm(w - w_star)
-        history.append(loss)
+
+        loss_history.append(loss)
         dist_history.append(dist)
 
-    return w, history, dist_history, w_star
+    return w, loss_history, dist_history, w_0
 
-def svrg_with_analytical_solution_comparison(X_train, y_train, feature_names):
-    cfg = svrg_config["svrg"]
-    w, loss_history, dist_history, w_star = svrg_ridge_regression(
-        X_train, y_train,
-        lam=cfg["lambda"],
-        lr=cfg["learning_rate"],
-        epochs=cfg["epochs"],
-        m=cfg["inner_iterations"]
-    )
 
-    print("SVRG Final Loss:", loss_history[-1])
-    print("SVRG Weights:", w)
-    print("Closed-Form Weights:", w_star)
+def get_largest_and_smallest_eigenvalue(lam, w_0, w_k, w_opt):
+    n_train = X_train.shape[0]
+    d = X_train.shape[1]
 
-    x = np.arange(len(feature_names))
+    # Hessian of the ridge regression loss
+    hessian = 2 * (X_train.T @ X_train) / n_train + 2 * lam * np.eye(d)
+    eigenvalues = np.linalg.eigvals(hessian)
+    L = np.max(eigenvalues)    # Smoothness constant
+    mu = np.min(eigenvalues)   # Strong convexity constant
+    Q = L / mu                 # Condition number
+
+    eta = svrg_config["svrg"]["lr"]
+    m = svrg_config["svrg"]["m"]
+    k = svrg_config["svrg"]["epochs"]
+
+    # Convergence rate constant phi (as derived from SVRG analysis)
+    phi = Q / (m * (1 - 2 * L * eta)) + (2 * L * eta) / (1 - 2 * L * eta)
+
+    # Loss function
+    def P(w):
+        return compute_loss(X_train, y_train, w, lam)
+
+    # Convergence bound for function value
+    expectation_bound = phi ** k * (P(w_0) - P(w_opt))
+
+    expectation_with = P(w_k) - P(w_opt)
+
+    print(f"L = {L:.5f}")
+    print(f"mu = {mu:.5f}")
+    print(f"Q = {Q:.5f}")
+    print(f"alpha (1/L) = {eta:.5f}")
+    print(f"phi = {phi:.5f}")
+    print(f"phi^k * (P(w_0) - P(w_*)) {k} epochs: {expectation_bound:.25e}")
+    print(f"E[P(w_k)] - E[P(w_*)]): {expectation_with:.25e}")
+
+    return eta, Q, hessian
+
+
+# alpha, Q, hess = get_largest_and_smallest_eigenvalue(svrg_config["svrg"]["lambda"])
+
+def svrg_with_analytical_solution():
+    lam = svrg_config["svrg"]["lambda"]
+    lr = svrg_config["svrg"]["lr"]
+    epochs = svrg_config["svrg"]["epochs"]
+    m = svrg_config["svrg"]["m"]
+
+    w_star = closed_form_solution(X_train, y_train, lam)
+    w_svrg, loss_history, dist_history, w_0 = svrg_ridge_regression(X_train, y_train, lam, lr, epochs, m, w_star)
+    get_largest_and_smallest_eigenvalue(lam=lam, w_0=w_0, w_k=w_svrg, w_opt=w_star)
+    print("Closed-form w_*:", w_star)
+    print("SVRG weights w:", w_svrg)
+    print("Final Loss:", loss_history[-1])
+
+    x = np.arange(len(svrg_config["features"]))
     fig, axs = plt.subplots(3, 1, figsize=(12, 12))
 
-    axs[0].plot(x, w_star, label="w* (Closed-form)", marker='o')
-    axs[0].plot(x, w, label="w (SVRG)", marker='x')
+    # Set common font sizes
+    label_fontsize = 14
+    tick_fontsize = 12
+    title_fontsize = 16
+    legend_fontsize = 12
+
+    # Plot 1: Weight comparison
+    axs[0].plot(x, w_star, label="w_* (Closed-form)", marker='o')
+    axs[0].plot(x, w_svrg, label="w (SVRG)", marker='x')
     axs[0].set_xticks(x)
-    axs[0].set_xticklabels(feature_names, rotation=45)
-    axs[0].set_ylabel("Weight Value")
-    axs[0].set_title("w (SVRG) vs w* (Closed-form)")
-    axs[0].legend()
+    axs[0].set_xticklabels(svrg_config["features"], rotation=45, fontsize=tick_fontsize)
+    axs[0].set_title("Weight Comparison", fontsize=title_fontsize)
+    axs[0].set_ylabel("Weight Value", fontsize=label_fontsize)
+    axs[0].legend(fontsize=legend_fontsize)
+    axs[0].tick_params(axis='y', labelsize=tick_fontsize)
     axs[0].grid(True)
 
-    axs[1].plot(loss_history, marker='o')
-    axs[1].set_xlabel("Epoch")
-    axs[1].set_ylabel("Loss")
-    axs[1].set_title("SVRG Loss History")
+    # Plot 2: Loss history
+    axs[1].plot(range(1, len(loss_history) + 1), loss_history, marker='o')
+    axs[1].set_xlabel("Epoch", fontsize=label_fontsize)
+    axs[1].set_ylabel("Loss", fontsize=label_fontsize)
+    axs[1].set_title("SVRG Loss History", fontsize=title_fontsize)
+    axs[1].tick_params(axis='both', labelsize=tick_fontsize)
     axs[1].grid(True)
 
-    axs[2].plot(dist_history, marker='o')
-    axs[2].set_xlabel("Epoch")
-    axs[2].set_ylabel("||w - w*||")
-    axs[2].set_title("Distance from SVRG to Closed-form")
+    # Plot 3: Distance to optimal
+    axs[2].plot(range(1, len(dist_history) + 1), dist_history, marker='o')
+    axs[2].set_xlabel("Epoch", fontsize=label_fontsize)
+    axs[2].set_ylabel("||w_s - w*||", fontsize=label_fontsize)
+    axs[2].set_title("SVRG Distance to Optimal Solution", fontsize=title_fontsize)
+    axs[2].tick_params(axis='both', labelsize=tick_fontsize)
     axs[2].grid(True)
 
     plt.tight_layout()
+    plt.savefig("results/svrg/svrg_m_1500_epoch_20_plot.svg", format="svg")
     plt.show()
 
-def load_data():
-    if svrg_config["mode"] == "real":
-        df = pd.read_csv(svrg_config["dataset_path"])
-        df['Date'] = pd.to_datetime(df['Date'])
-        df = df.sort_values('Date').dropna().reset_index(drop=True)
-        X = df[svrg_config["features"]].values
-        y = df[svrg_config["target"]].values
-        feature_names = svrg_config["features"]
 
-    elif svrg_config["mode"] == "synthetic":
-        # Manually specify the path to your synthetic dataset CSV
-        synthetic_path = "dataset/synthetic_data.csv"  # <-- Change this path as needed
+# Optional: still show the plot in the window
 
-        df = pd.read_csv(synthetic_path)
 
-        # Specify which columns to use
-        feature_names = ['f1', 'f2', 'f3', 'f4', 'f5']  # <-- Adjust based on your file
-        target_column = 'y'  # <-- Adjust based on your file
+def tune_lambda_for_svrg():
+    lambda_values = [0.0001, 0.001, 0.01, 0.1, 1, 10]
+    lr = svrg_config["svrg"]["lr"]
+    epochs = svrg_config["svrg"]["epochs"]
+    m = svrg_config["svrg"]["m"]
 
-        X = df[feature_names].values
-        y = df[target_column].values
-        return X, y, feature_names
+    results = []
 
-    else:
-        raise ValueError("Invalid mode. Choose 'real' or 'synthetic'.")
+    for lam in lambda_values:
+        w_star = closed_form_solution(X_train, y_train, lam)
+        w, _, _ = svrg_ridge_regression(X_train, y_train, lam, lr, epochs, m, w_star)
+        y_pred = X_test @ w
+        rmse = math.sqrt(mean_squared_error(y_test, y_pred))
+        results.append((lam, rmse))
 
-    return X, y, feature_names
+    best_lambda, best_rmse = min(results, key=lambda x: x[1])
+    print(f"\nBest lambda: {best_lambda}, with RMSE: {best_rmse:.5f}")
+    return best_lambda
 
-def run():
-    X, y, feature_names = load_data()
-    X_train, X_test, y_train, y_test = prepare_data(X, y)
-    svrg_with_analytical_solution_comparison(X_train, y_train, feature_names)
 
-if __name__ == "__main__":
-    run()
+# === RUN HERE ===
+# Uncomment below lines to run experiments
+
+# best_lam = tune_lambda_for_svrg()
+# svrg_config["svrg"]["lambda"] = best_lam
+
+svrg_with_analytical_solution()
+
+def estimate_flops_closed_form_and_svrg(n, d, T_svrg, m, lam=0.01):
+    """
+    Estimate FLOPs for:
+    - Closed-form ridge regression
+    - SVRG for ridge regression
+
+    Parameters:
+        n (int): Number of training samples
+        d (int): Number of features
+        T_svrg (int): Number of outer epochs in SVRG
+        m (int): Number of inner steps per epoch
+        lam (float): Regularization strength (used only for naming clarity)
+
+    Returns:
+        dict: Estimated FLOPs for both methods
+    """
+    # === Closed-form ===
+    # FLOPs: 2nd^2 + 2nd + 2d^2 + (2/3)d^3
+    flops_closed_form = 2 * n * d**2 + 2 * n * d + 2 * d**2 + (2 / 3) * d**3
+
+    # === SVRG ===
+    # For each epoch:
+    #   Full gradient: X @ w_tilde → 2nd
+    #   Then X.T @ (...) → 2nd
+    #   Regularization term: 2d
+    flops_full_gradient = (T_svrg - 1) * (2 * n * d + 2 * n * d + 2 * d)
+
+    # Inner loop:
+    # Each inner iteration (m steps per epoch):
+    #   - grad_i: x_i.T @ (x_i @ w - y_i) → 2d
+    #   - grad_i_tilde: same → 2d
+    #   - regularization terms: 2d
+    #   - final update (subtract scaled gradient): 2d
+    flops_per_inner_iter = 2 * d + 2 * d + 2 * d + 2 * d  # = 8d
+    flops_inner_loop = (T_svrg - 1) * m * flops_per_inner_iter
+
+    # Total SVRG FLOPs
+    flops_svrg = flops_full_gradient + flops_inner_loop
+
+    return {
+        "closed_form_flops": int(flops_closed_form),
+        "svrg_flops": int(flops_svrg)
+    }
+
+print(estimate_flops_closed_form_and_svrg(n=18658, d=5, T_svrg=svrg_config["svrg"]["epochs"], m=svrg_config["svrg"]["m"], lam = svrg_config["svrg"]["lambda"]))
+
+
+#
+# def get_largest_and_smallest_eigenvalue(lam, w_0, w_opt):
+#     n_train = X_train.shape[0]
+#     hessian = 2 * (X_train.T @ X_train) / n_train + 2 * lam * np.eye(X_train.shape[1])
+#     eigenvalues = np.linalg.eigvals(hessian)
+#     L = np.max(eigenvalues)
+#     print("L is", L)
+#     mu = np.min(eigenvalues)
+#     print("mu is", mu)
+#     Q = L / mu
+#     print("Q is", Q)
+#     alpha = 1 / L
+#     phi = Q / svrg_config["svrg"]["m"] * L * (1 - 2 * L * svrg_config["svrg"]["lr"]) + 2 * L * alpha / (
+#                 1 - 2 * L * svrg_config["svrg"]["lr"])
+#     print("phi is", phi)
+#     print("Expectation is", phi ^ svrg_config["svrg"]["epochs"] * (w_0 - w_opt))
+#     return alpha, Q, hessian
+
+# def get_largest_and_smallest_eigenvalue(lam, w_0, w_opt):
+#     n_train = X_train.shape[0]
+#     d = X_train.shape[1]
+#
+#     # Hessian of the ridge regression loss
+#     hessian = 2 * (X_train.T @ X_train) / n_train + 2 * lam * np.eye(d)
+#     eigenvalues = np.linalg.eigvals(hessian)
+#     L = np.max(eigenvalues)    # Smoothness constant
+#     mu = np.min(eigenvalues)   # Strong convexity constant
+#     Q = L / mu                 # Condition number
+#     alpha = 1 / L              # Ideal learning rate
+#
+#     eta = svrg_config["svrg"]["lr"]
+#     m = svrg_config["svrg"]["m"]
+#     k = svrg_config["svrg"]["epochs"]
+#
+#     # Convergence rate constant phi (as derived from SVRG analysis)
+#     phi = Q / (m * (1 - 2 * L * eta)) + (2 * L * eta) / (1 - 2 * L * eta)
+#
+#     # Loss function
+#     def P(w):
+#         return compute_loss(X_train, y_train, w, lam)
+#
+#     # Convergence bound for function value
+#     expectation_bound = phi ** k * (P(w_0) - P(w_opt))
+#     expectation_with
+#
+#     print(f"L = {L:.5f}")
+#     print(f"mu = {mu:.5f}")
+#     print(f"Q = {Q:.5f}")
+#     print(f"alpha (1/L) = {alpha:.5f}")
+#     print(f"phi = {phi:.5f}")
+#     print(f"Expected suboptimality after {k} epochs: {expectation_bound:.5e}")
+#
+#     return alpha, Q, hessian
+
+
+# alpha, Q, hess = get_largest_and_smallest_eigenvalue(svrg_config["svrg"]["lambda"])

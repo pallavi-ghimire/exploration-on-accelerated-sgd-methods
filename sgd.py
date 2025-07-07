@@ -71,7 +71,6 @@ def closed_form_computation(X=X_train, y=y_train, lam=0.01):
 
 def sgd_ridge_regression(X, y, lambda_hyperparameter=0.01, lr=0.005, iterations=20000):
     """
-    Single-loop SGD implementation for Ridge Regression.
     - lambda_hyperparameter: regularization strength
     - lr: learning rate
     - iterations: total number of SGD updates (i.e., steps)
@@ -99,6 +98,7 @@ def sgd_ridge_regression(X, y, lambda_hyperparameter=0.01, lr=0.005, iterations=
             dist_history.append(dist)
 
     return w, history, dist_history
+
 
 
 
@@ -157,6 +157,9 @@ def sgd_with_analytical_solution_comparison():
 # find_lambda_then_run_svrg()
 # get_largest_eigenvalue()
 sgd_with_analytical_solution_comparison()
+
+
+
 
 # checking data, and the value ranges (max and min), to determine whether scaling needs to be performed
 # print(spx.head())
