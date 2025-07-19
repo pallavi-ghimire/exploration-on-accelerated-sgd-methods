@@ -9,8 +9,11 @@ from sklearn.preprocessing import StandardScaler
 # --------------------------
 sgd_config = {
     "data": {
-        "file_path": "dataset/n100000_d20_mu1_L3198.csv",
-        "features": [f"x{i}" for i in range(50)],
+        # "file_path": "dataset/sgd/d50_mu1_L50.csv",
+        "file_path": "dataset/test/d25_mu1_L50.csv",
+        "file_path_optimal": "dataset/test/d25_mu1_L50_w_star",
+        # "file_path_optimal": "dataset/sgd/d50_mu1_L50_w_star",
+        "features": [f"x{i}" for i in range(25)],
         "target": "y",
     },
     "train_test_split": {
@@ -19,12 +22,13 @@ sgd_config = {
     },
     "ridge_regression": {
         "lambda": 0.01,
-        "lr": 0.005,
-        "iterations": 80000,
+        "lr": 0.01,
+        "iterations": 30000,
     },
     "plot": {
-        "interval": 1000,
-    }
+        "interval": 500,
+        "save_path": "results/sgd/synthetic/sgd_d_25_Q_50.svg"
+    },
 }
 
 # --------------------------
@@ -37,8 +41,9 @@ y = df[sgd_config["data"]["target"]].values
 # --------------------------
 # Preprocessing
 # --------------------------
-scaler = StandardScaler()
-X_scaled = scaler.fit_transform(X)
+# scaler = StandardScaler()
+# X_scaled = scaler.fit_transform(X)
+X_scaled = X
 
 X_train, X_test, y_train, y_test = train_test_split(
     X_scaled, y,
@@ -50,13 +55,20 @@ X_train, X_test, y_train, y_test = train_test_split(
 # Functions
 # --------------------------
 def compute_loss(X, y, w, lam):
-    w_unscaled = w / scaler.scale_
-    X_unscaled = X * scaler.scale_
+    # w_unscaled = w / scaler.scale_
+    w_unscaled = w
+    X_unscaled = X
+    # X_unscaled = X * scaler.scale_
     residuals = X_unscaled @ w_unscaled - y
     return (1 / len(y)) * np.sum(residuals ** 2) + lam * np.sum(w_unscaled ** 2)
 
 def closed_form_solution():
-    return np.loadtxt("dataset/n100000_d20_mu1_L3198_w_star")
+    # return np.loadtxt(sgd_config["data"]["file_path_optimal"])
+    n, d = X_train.shape
+    lam = sgd_config["ridge_regression"]["lambda"]
+    A = X_train.T @ X_train + lam * n * np.eye(d)
+    b = X_train.T @ y_train
+    return np.linalg.solve(A, b)
 
 def sgd_ridge_regression(X, y, lam, lr, iterations):
     n, d = X.shape
@@ -80,11 +92,19 @@ def sgd_ridge_regression(X, y, lam, lr, iterations):
 
         if (k + 1) % sgd_config["plot"]["interval"] == 0:
             loss = compute_loss(X, y, w, lam)
-            dist = np.linalg.norm((w / scaler.scale_) - w_star)
+            # dist = np.linalg.norm((w / scaler.scale_) - w_star)
+            dist = np.linalg.norm(w - w_star)
             loss_history.append(loss)
             dist_history.append(dist)
 
     return w, loss_history, dist_history, w_star, w_0
+
+def compute_ridge_loss(X, y, w, lam):
+    residual = X @ w - y
+    n = X.shape[0]
+    mse = (1 / n) * np.sum(residual ** 2)
+    reg = lam * np.sum(w ** 2)
+    return mse + reg
 
 def estimate_flops_ridge_regression_no_logging(n, d, T):
     """
@@ -166,35 +186,46 @@ def sgd_with_analytical_solution_comparison():
 
     w, loss_history, dist_history, w_star, w_0 = sgd_ridge_regression(X_train, y_train, lam, lr, iterations)
 
+    w_closed = closed_form_solution()
+    closed_form_loss = compute_ridge_loss(X_train, y_train, w_closed, lam)
+
     print("Final Loss:", loss_history[-1])
+    print("Closed-Form Loss: ", closed_form_loss)
 
     al, q, hess = get_largest_and_smallest_eigenvalue(lam=lam, w_0=w_0, w_k=w, w_opt=w_star)
 
     x = np.arange(len(sgd_config["data"]["features"]))
-    fig, axs = plt.subplots(3, 1, figsize=(12, 12))
+    # fig, axs = plt.subplots(3, 1, figsize=(12, 12))
+    fig, axs = plt.subplots(2, 1, figsize=(8, 10))
 
-    axs[0].plot(x, w_star, label="w_* (Closed-form)", marker='o')
-    axs[0].plot(x, w / scaler.scale_, label="w (SGD)", marker='x')
-    axs[0].set_xticks(x)
-    axs[0].set_xticklabels(sgd_config["data"]["features"], rotation=45)
-    axs[0].set_ylabel("Weight Value")
-    axs[0].set_title("Comparison of w (SGD) vs w_* (Closed-form)")
-    axs[0].legend()
+    # axs[0].plot(np.arange(1, len(loss_history) + 1) * sgd_config["plot"]["interval"], loss_history, marker='o')
+    # axs[0].set_xlabel("Iteration", fontsize=13)
+    # axs[0].set_ylabel("Loss", fontsize=13)
+    # axs[0].tick_params(axis='both', labelsize=14)
+    # axs[0].set_title("SGD Optimization History", fontsize=15)
+    # axs[0].grid(True)
+
+    axs[0].plot(np.arange(1, len(loss_history) + 1) * sgd_config["plot"]["interval"],
+                loss_history, marker='o', label='SGD Loss')
+
+    axs[0].axhline(y=closed_form_loss, color='red', linestyle='--', label='Closed-form Loss')
+
+    axs[0].set_xlabel("Iteration", fontsize=15)
+    axs[0].set_ylabel("Loss", fontsize=15)
+    axs[0].tick_params(axis='both', labelsize=15)
+    axs[0].set_title("SGD Optimization History", fontsize=15)
     axs[0].grid(True)
+    axs[0].legend(fontsize=15)
 
-    axs[1].plot(np.arange(1, len(loss_history) + 1) * sgd_config["plot"]["interval"], loss_history, marker='o')
-    axs[1].set_xlabel("Iteration")
-    axs[1].set_ylabel("Loss")
-    axs[1].set_title("SGD Optimization History")
+    axs[1].plot(np.arange(1, len(dist_history) + 1) * sgd_config["plot"]["interval"], dist_history, marker='o')
+    axs[1].set_xlabel("Iteration", fontsize=15)
+    axs[1].set_ylabel("||w - w*||", fontsize=15)
+    axs[1].tick_params(axis='both', labelsize=15)
+    axs[1].set_title("Distance from Closed-form Solution", fontsize=15)
     axs[1].grid(True)
 
-    axs[2].plot(np.arange(1, len(dist_history) + 1) * sgd_config["plot"]["interval"], dist_history, marker='o')
-    axs[2].set_xlabel("Iteration")
-    axs[2].set_ylabel("||w - w*||")
-    axs[2].set_title("Distance from Closed-form Solution")
-    axs[2].grid(True)
-
     plt.tight_layout()
+    plt.savefig(sgd_config["plot"]["save_path"], format="svg")
     plt.show()
 
 # --------------------------
@@ -203,4 +234,4 @@ def sgd_with_analytical_solution_comparison():
 if __name__ == "__main__":
     sgd_with_analytical_solution_comparison()
 
-print(estimate_flops_ridge_regression_no_logging(n=80000, d=50, T=sgd_config["ridge_regression"]["iterations"]))
+print(estimate_flops_ridge_regression_no_logging(n=80000, d=25, T=sgd_config["ridge_regression"]["iterations"]))

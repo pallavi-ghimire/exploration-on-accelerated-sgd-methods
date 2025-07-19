@@ -16,10 +16,13 @@ svrg_config = {
         "random_state": 1
     },
     "svrg": {
-        "lambda": 0.01,
+        "lambda": 1,
         "lr": 0.01,
-        "epochs": 10,
-        "m": 2000,
+        "epochs": 5,
+        "m": 200,
+    },
+    "plot": {
+        "save_path": "results/svrg/svrg_real_lambda_1.svg"
     }
 }
 
@@ -45,6 +48,13 @@ def compute_loss(X, y, w, lam):
     n = len(y)
     return (1 / n) * np.sum((X @ w - y) ** 2) + lam * np.sum(w ** 2)
 
+
+def compute_ridge_loss(X, y, w, lam):
+    residual = X @ w - y
+    n = X.shape[0]
+    mse = (1 / n) * np.sum(residual ** 2)
+    reg = lam * np.sum(w ** 2)
+    return mse + reg
 
 def closed_form_solution(X, y, lam):
     n, d = X.shape
@@ -141,16 +151,20 @@ def svrg_with_analytical_solution():
     get_largest_and_smallest_eigenvalue(lam=lam, w_0=w_0, w_k=w_svrg, w_opt=w_star)
     print("Closed-form w_*:", w_star)
     print("SVRG weights w:", w_svrg)
+
+    closed_form_loss = compute_ridge_loss(X_train, y_train, w_star, lam)
+
     print("Final Loss:", loss_history[-1])
+    print("Closed-Form Loss: ", closed_form_loss)
 
     x = np.arange(len(svrg_config["features"]))
     fig, axs = plt.subplots(3, 1, figsize=(12, 12))
 
     # Set common font sizes
-    label_fontsize = 14
-    tick_fontsize = 12
+    label_fontsize = 15
+    tick_fontsize = 15
     title_fontsize = 16
-    legend_fontsize = 12
+    legend_fontsize = 15
 
     # Plot 1: Weight comparison
     axs[0].plot(x, w_star, label="w_* (Closed-form)", marker='o')
@@ -164,12 +178,14 @@ def svrg_with_analytical_solution():
     axs[0].grid(True)
 
     # Plot 2: Loss history
-    axs[1].plot(range(1, len(loss_history) + 1), loss_history, marker='o')
+    axs[1].plot(range(1, len(loss_history) + 1), loss_history, marker='o', label='SVRG Loss')
+    axs[1].axhline(y=closed_form_loss, color='red', linestyle='--', label='Closed-form Loss')
     axs[1].set_xlabel("Epoch", fontsize=label_fontsize)
     axs[1].set_ylabel("Loss", fontsize=label_fontsize)
     axs[1].set_title("SVRG Loss History", fontsize=title_fontsize)
     axs[1].tick_params(axis='both', labelsize=tick_fontsize)
     axs[1].grid(True)
+    axs[1].legend(fontsize=14)
 
     # Plot 3: Distance to optimal
     axs[2].plot(range(1, len(dist_history) + 1), dist_history, marker='o')
@@ -180,7 +196,8 @@ def svrg_with_analytical_solution():
     axs[2].grid(True)
 
     plt.tight_layout()
-    plt.savefig("results/svrg/svrg_m_1500_epoch_20_plot.svg", format="svg")
+    # plt.savefig("results/svrg/svrg_m_1500_epoch_20_plot.svg", format="svg")
+    plt.savefig(svrg_config["plot"]["save_path"], format="svg")
     plt.show()
 
 

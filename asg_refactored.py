@@ -25,20 +25,22 @@ asg_config = {
         "noise_std": 0.05,
     },
     "ridge_regression_minibatch": {
-        "lambda": 0.01,
-        "alpha": 0.01,
+        "lambda": 1,
+        "alpha": 0.005,
         "beta": 0.48,
-        "iterations": 2000,
+        "iterations": 400,
         "noise_std": 0.05,
         "batch_size": 100
     },
     "spectral_analysis": {
-        "lambda_eigen": 0.01,
+        "lambda_eigen": 1,
         "eta": 0.01,
         "beta": 0.48
     },
     "plot": {
-        "interval": 50
+        "interval": 10,
+        "save_path": "results/asg/asg_real_lambda_1.svg",
+        "save_path_pareto": "results/asg/pareto_100_points_with_R_lambda_1.svg"
     }
 }
 
@@ -130,8 +132,9 @@ def asg_ridge_regression(X, y, lam, lr, beta, total_iterations, w_closed_form):
     return weights, loss_history, dist_history
 
 
-def compute_sigma(X, y, w_star, ridge_strength, beta):
+def compute_sigma(X, y, w_star, ridge_strength, beta, R_lambda):
     n = X.shape[0]
+    eta = asg_config["ridge_regression_minibatch"]["alpha"]
     sigma = np.mean([np.linalg.norm(2 * (X[i] @ w_star - y[i]) * X[i] + 2 * ridge_strength * w_star) for i in range(n)])
     compute_noise_term(sigma, eta, beta, R_lambda)
     return sigma
@@ -199,7 +202,7 @@ def get_asg_convergence_properties(lam, w_0, w_k, w_opt, alpha, beta):
     # Loss function
     def P(w): return compute_loss(X_train, y_train, w, lam)
 
-    sigma = compute_sigma(X_train, y_train, closed_form_value, asg_config["ridge_regression_minibatch"]["lambda"], b)
+    sigma = compute_sigma(X_train, y_train, w_opt, asg_config["ridge_regression_minibatch"]["lambda"], b, R_lambda)
     print("sigma =", sigma)
 
     LHS = P(w_k) - P(w_opt)
@@ -213,8 +216,8 @@ def get_asg_convergence_properties(lam, w_0, w_k, w_opt, alpha, beta):
     print(f"C_lambda = {C_lambda:.5f}")
     print(f"delta_lambda = {delta_lambda:.5f}")
     print(f"R_lambda = {R_lambda:.5f}")
-    print("LHS = ", LHS)
-    print("RHS = ", RHS)
+    print("E[P(v_k+1)] - E[P(w_*)] = ", LHS)
+    print("noise neighborhood proportional to sigma^2 = ", RHS)
 
     return alpha, beta, Q, R_lambda, rho, C_lambda
 
@@ -331,6 +334,13 @@ def asg_ridge_regression_minibatch(X, y, lam, lr, beta, total_iterations, w_clos
     return weights, loss_history, dist_history, y_1
 
 
+def compute_ridge_loss(X, y, w, lam):
+    residual = X @ w - y
+    n = X.shape[0]
+    mse = (1 / n) * np.sum(residual ** 2)
+    reg = lam * np.sum(w ** 2)
+    return mse + reg
+
 def asg_minibatch_comparison(w_closed_form, batch_size=32):
     lam = asg_config["ridge_regression_minibatch"]["lambda"]
     alpha = asg_config["ridge_regression_minibatch"]["alpha"]
@@ -341,32 +351,53 @@ def asg_minibatch_comparison(w_closed_form, batch_size=32):
         X_train, y_train, lam, alpha, beta, iterations, w_closed_form, batch_size=batch_size
     )
 
+    closed_form_loss = compute_ridge_loss(X_train, y_train, w_closed_form, lam)
+
+    print("Final Loss:", loss_history[-1])
+    print("Closed-Form Loss: ", closed_form_loss)
+
     get_asg_convergence_properties(lam=lam, w_0=y_1, w_k=w_asg_mb, w_opt=w_closed_form, alpha=alpha, beta=beta)
     x = np.arange(len(asg_config["features"]))
     fig, axs = plt.subplots(3, 1, figsize=(12, 12))
+    label_fontsize = 15
+    tick_fontsize = 15
+    title_fontsize = 16
+    legend_fontsize = 15
+
+    print(f"Final Loss: {loss_history[-1]:.15f}")
 
     axs[0].plot(x, w_closed_form, label="w_* (Closed-form)", marker='o')
     axs[0].plot(x, w_asg_mb, label="w (ASG Minibatch)", marker='x')
     axs[0].set_xticks(x)
-    axs[0].set_xticklabels(asg_config["features"], rotation=45)
-    axs[0].set_ylabel("Weight Value")
-    axs[0].set_title("ASG Minibatch vs Closed-form")
-    axs[0].legend()
+    axs[0].set_xticklabels(asg_config["features"], rotation=45, fontsize=tick_fontsize)
+    axs[0].set_ylabel("Weight Value", fontsize=label_fontsize)
+    axs[0].set_title("ASG Minibatch vs Closed-form", fontsize=title_fontsize)
+    axs[0].legend(fontsize=legend_fontsize)
     axs[0].grid(True)
+    axs[0].tick_params(axis='both', labelsize=tick_fontsize)
 
-    axs[1].plot(range(1, len(loss_history) + 1), loss_history, marker='o')
-    axs[1].set_xlabel("Iterations")
-    axs[1].set_ylabel("Loss")
-    axs[1].set_title("ASG Minibatch Loss")
+    axs[1].plot(range(1, len(loss_history) + 1), loss_history, marker='o', label='ASG Loss')
+    axs[1].axhline(y=closed_form_loss, color='red', linestyle='--', label='Closed-form Loss')
+    axs[1].set_xlabel("Iterations", fontsize=label_fontsize)
+    axs[1].set_ylabel("Loss", fontsize=label_fontsize)
+    axs[1].set_title("ASG Minibatch Loss", fontsize=title_fontsize)
+    axs[1].tick_params(axis='both', labelsize=tick_fontsize)
     axs[1].grid(True)
+    axs[1].legend(fontsize=legend_fontsize)
 
     axs[2].plot(range(1, len(dist_history) + 1), dist_history, marker='o')
-    axs[2].set_xlabel("Iterations")
-    axs[2].set_ylabel("||y_k - x*||")
-    axs[2].set_title("Minibatch: Lookahead Distance to Optimal")
+    axs[2].set_xlabel("Iterations", fontsize=label_fontsize)
+    axs[2].set_ylabel("||y_k - x*||", fontsize=label_fontsize)
+    axs[2].set_title("Minibatch: Lookahead Distance to Optimal", fontsize=title_fontsize)
+    axs[2].tick_params(axis='both', labelsize=tick_fontsize)
     axs[2].grid(True)
 
     plt.tight_layout()
+    plt.savefig(asg_config["plot"]["save_path"], format="svg")
+    plt.show()
+
+    plt.tight_layout()
+    plt.savefig(asg_config["plot"]["save_path"], format="svg")
     plt.show()
 
 
@@ -410,36 +441,38 @@ C_lambda = 1 - eta * (1+b) * lambda
 del_lambda = C_lambda^2 - 4*(b^2) + (b^2 + 1)
 
 sigma was calculated to be 3.673290121568296
+
+this portion is now included inside another function
 """
 
 # minibatch
-eta = asg_config["spectral_analysis"]["eta"]
-b = asg_config["spectral_analysis"]["beta"]
-_, _, Q, hess = get_largest_and_smallest_eigenvalue(asg_config["spectral_analysis"]["lambda_eigen"])
-A = construct_A(hess, eta, b)
-lam = max(np.linalg.eigvals(A))
-
-
-
-C_lambda = (1 - eta * (1 + b) * lam) ** 2 + eta ** 2 * lam ** 2
-del_lambda = C_lambda ** 2 - 4 * (b ** 2) * ((1 - eta * lam) ** 2)
-R_lambda = 1 / (2 ** 0.5) * (C_lambda + del_lambda ** 0.5) ** 0.5
-
-print("C_lambda, del_lambda, R_lambda", C_lambda, del_lambda, R_lambda)
-if del_lambda >= 0 and abs(R_lambda) < 1:
-    print("valid value!")
-else:
-    print("value greater or invalid!")
-
-rho = max(abs(np.linalg.eigvals(A)))
-print("\nSpectral radius ρ(A):", rho)
-max_singular_value = max(np.linalg.svd(A, compute_uv=False))
-print("\nlargest singular value", max_singular_value)
-
-closed_form_value = closed_form_computation(X_train, y_train, asg_config["ridge_regression_minibatch"]["lambda"])
-sigma = compute_sigma(X_train, y_train, closed_form_value, asg_config["ridge_regression_minibatch"]["lambda"], b)
-
-print("sigma =", sigma)
+# eta = asg_config["spectral_analysis"]["eta"]
+# b = asg_config["spectral_analysis"]["beta"]
+# _, _, Q, hess = get_largest_and_smallest_eigenvalue(asg_config["spectral_analysis"]["lambda_eigen"])
+# A = construct_A(hess, eta, b)
+# lam = max(np.linalg.eigvals(A))
+#
+#
+#
+# C_lambda = (1 - eta * (1 + b) * lam) ** 2 + eta ** 2 * lam ** 2
+# del_lambda = C_lambda ** 2 - 4 * (b ** 2) * ((1 - eta * lam) ** 2)
+# R_lambda = 1 / (2 ** 0.5) * (C_lambda + del_lambda ** 0.5) ** 0.5
+#
+# print("C_lambda, del_lambda, R_lambda", C_lambda, del_lambda, R_lambda)
+# if del_lambda >= 0 and abs(R_lambda) < 1:
+#     print("valid value!")
+# else:
+#     print("value greater or invalid!")
+#
+# rho = max(abs(np.linalg.eigvals(A)))
+# print("\nSpectral radius ρ(A):", rho)
+# max_singular_value = max(np.linalg.svd(A, compute_uv=False))
+# print("\nlargest singular value", max_singular_value)
+#
+# closed_form_value = closed_form_computation(X_train, y_train, asg_config["ridge_regression_minibatch"]["lambda"])
+# sigma = compute_sigma(X_train, y_train, closed_form_value, asg_config["ridge_regression_minibatch"]["lambda"], b)
+#
+# print("sigma =", sigma)
 
 asg_minibatch_comparison(
     w_closed_form=closed_form_computation(X_train, y_train, asg_config["ridge_regression_minibatch"]["lambda"]),
@@ -487,92 +520,9 @@ def estimate_flops_closed_form_and_asg_minibatch(n, d, T_asg, batch_size):
 print(estimate_flops_closed_form_and_asg_minibatch(n=18658, d=5, T_asg=asg_config["ridge_regression_minibatch"]["iterations"], batch_size=asg_config["ridge_regression_minibatch"]["batch_size"]))
 
 
-# def generate_valid_pareto_front(
-#         asg_config,
-#         X_train,
-#         y_train,
-#         w_star,
-#         num_points=100
-# ):
-#     d = X_train.shape[1]
-#     lam = asg_config["ridge_regression_minibatch"]["lambda"]
-#     batch_size = asg_config["ridge_regression_minibatch"]["batch_size"]
-#     iterations = asg_config["ridge_regression_minibatch"]["iterations"]
-#
-#     # Compute Hessian
-#     H = (2 / len(X_train)) * X_train.T @ X_train + 2 * lam * np.eye(d)
-#
-#     alphas = np.linspace(0.001, 0.9, num_points)
-#     betas = np.linspace(0.001, 0.9, num_points)
-#
-#     # print(alphas, betas)
-#
-#     results = []
-#     valid_params = 0
-#
-#     """the actual code is commented here"""
-#     for alpha in alphas:
-#         for beta in betas:
-#             print("trying for alpha and beta as: ", alpha, beta)
-#             try:
-#                 # Construct matrix A and compute spectral radius
-#                 A = construct_A(H, alpha, beta)
-#                 rho = max(np.linalg.eigvals(A))
-#                 # who gives L: the worst-case eigenvalue, which is seleched whenever the total n is used
-#                 # print("rho", rho)
-#
-#                 C_lambda = (1 - alpha * (1 + beta) * rho) ** 2 + alpha ** 2 * rho ** 2
-#                 del_lambda = C_lambda ** 2 - 4 * (b ** 2) * ((1 - eta * lam) ** 2)
-#                 # R_lambda = 1 / (2 ** 0.5) * (C_lambda + del_lambda ** 0.5) ** 0.5
-#                 if del_lambda < 0:
-#                     R_lambda = np.nan
-#                 else:
-#                     R_lambda = (1 / np.sqrt(2)) * np.sqrt(C_lambda + np.sqrt(del_lambda))
-#
-#                 if not np.isnan(R_lambda) and np.isreal(R_lambda) and R_lambda < 1 and del_lambda >= 0:
-#                     print("R_lambda is valid, with R_lambda:", R_lambda, ", rho is", rho, ", alpha is", alpha, ", beta is", beta)
-#                     # print("R_lambda =", R_lambda)
-#                 # Check the convergence condition
-#                 # if R_lambda < 1:
-#                     # Run ASG minibatch
-#                     weights, loss_history, dist_history = asg_ridge_regression_minibatch(
-#                         X_train, y_train,
-#                         lam=lam,
-#                         lr=alpha,
-#                         beta=beta,
-#                         total_iterations=iterations,
-#                         w_closed_form=w_star,
-#                         batch_size=batch_size
-#                     )
-#                     final_loss = compute_loss(X_train, y_train, weights, lam)
-#                     final_dist = np.linalg.norm(weights - w_star)
-#
-#                     results.append((final_loss, final_dist, alpha, beta))
-#                     valid_params += 1
-#
-#             except Exception as e:
-#                 print(f"Skipping alpha={alpha:.3f}, beta={beta:.3f} due to error: {e}")
-#
-#     if not results:
-#         print("No valid (alpha, beta) combinations found with spectral radius < 1.")
-#         return None
-#
-#     results = np.array(results)
-#     print(len(results))
-#
-#     # Plotting Pareto front
-#     plt.figure(figsize=(10, 6))
-#     scatter = plt.scatter(results[:, 0], results[:, 1], c=results[:, 2], cmap='viridis', s=60, edgecolor='k')
-#     plt.colorbar(scatter, label='Alpha values')
-#     plt.xlabel("Final Loss")
-#     plt.ylabel("Distance to Optimal Solution ||w - w*||")
-#     plt.title(f"Pareto Front for Minibatch ASG (Valid alpha-beta pairs: {valid_params})")
-#     plt.grid(True)
-#     plt.tight_layout()
-#     plt.show()
-#
-#     return results
-
+"""
+old pareto chart
+"""
 def generate_valid_pareto_front(
     asg_config,
     X_train,
@@ -645,6 +595,7 @@ def generate_valid_pareto_front(
 
     results = np.array(results)
     print(f"Number of valid parameter combinations: {valid_params}")
+    print("Lowest value of R_lambda")
 
     # Plotting: alpha vs beta with color as distance to optimum
     # plt.figure(figsize=(10, 6))
@@ -657,23 +608,60 @@ def generate_valid_pareto_front(
     # plt.tight_layout()
     # plt.show()
 
+    """old code for chart"""
+    # alphas = results[:, 0]
+    # betas = results[:, 1]
+    # distances = results[:, 2]
+    #
+    # # Scatter plot
+    # plt.figure(figsize=(12, 6))
+    #
+    # # Subplot 1: Scatter plot (Pareto front)
+    # plt.subplot(1, 2, 1)
+    # scatter = plt.scatter(alphas, betas, c=distances, cmap='viridis', s=60, edgecolor='k')
+    # plt.colorbar(scatter, label='Distance to Optimal ||w - w*||')
+    # plt.xlabel("Alpha (Learning Rate)")
+    # plt.ylabel("Beta (Momentum)")
+    # plt.title("Pareto Front (Distance Coloring)")
+    # plt.grid(True)
+    #
+    # # Subplot 2: Quantile plot
+    # plt.subplot(1, 2, 2)
+    # sorted_distances = np.sort(distances)
+    # quantiles = np.linspace(0, 1, len(sorted_distances))
+    # plt.plot(quantiles, sorted_distances, marker='o')
+    # plt.xlabel("Quantile")
+    # plt.ylabel("Distance to Optimum")
+    # plt.title("Quantile Plot of Final Distance ||w - w*||")
+    # plt.grid(True)
+    #
+    # plt.tight_layout()
+    # plt.show()
+    """end of old code for charts"""
     alphas = results[:, 0]
     betas = results[:, 1]
     distances = results[:, 2]
+    log_distances = np.log1p(distances)  # log(1 + distance) for better color contrast
 
     # Scatter plot
     plt.figure(figsize=(12, 6))
 
-    # Subplot 1: Scatter plot (Pareto front)
+    # Subplot 1: Scatter plot (Pareto front) with log-coloring
     plt.subplot(1, 2, 1)
-    scatter = plt.scatter(alphas, betas, c=distances, cmap='viridis', s=60, edgecolor='k')
-    plt.colorbar(scatter, label='Distance to Optimal ||w - w*||')
+    scatter = plt.scatter(
+        alphas, betas,
+        c=log_distances,
+        cmap='viridis',
+        s=60,
+        edgecolor='k'
+    )
+    plt.colorbar(scatter, label='log(1 + Distance to Optimal ||w - w*||)')
     plt.xlabel("Alpha (Learning Rate)")
     plt.ylabel("Beta (Momentum)")
-    plt.title("Pareto Front (Distance Coloring)")
+    plt.title("Pareto Front (Log-Distance Coloring)")
     plt.grid(True)
 
-    # Subplot 2: Quantile plot
+    # Subplot 2: Quantile plot of original distances
     plt.subplot(1, 2, 2)
     sorted_distances = np.sort(distances)
     quantiles = np.linspace(0, 1, len(sorted_distances))
@@ -684,12 +672,152 @@ def generate_valid_pareto_front(
     plt.grid(True)
 
     plt.tight_layout()
+    plt.savefig("results/asg/pareto_100_points.svg", format="svg")
     plt.show()
+
 
     return results
 
 
+"""
+new pareto chart
+"""
+
+def generate_valid_pareto_front_new(
+    asg_config,
+    X_train,
+    y_train,
+    w_star,
+    num_points=50
+):
+    d = X_train.shape[1]
+    lam = asg_config["ridge_regression_minibatch"]["lambda"]
+    batch_size = asg_config["ridge_regression_minibatch"]["batch_size"]
+    iterations = asg_config["ridge_regression_minibatch"]["iterations"]
+
+    # Compute Hessian
+    H = (2 / len(X_train)) * X_train.T @ X_train + 2 * lam * np.eye(d)
+
+    alphas = np.linspace(0.001, 0.9, num_points)
+    betas = np.linspace(0.001, 0.9, num_points)
+
+    results = []  # stores (alpha, beta, final_dist, R_lambda)
+    valid_params = 0
+
+    for alpha in alphas:
+        for beta in betas:
+            try:
+                A = construct_A(H, alpha, beta)
+                rho = max(np.linalg.eigvals(A))
+
+                C_lambda = (1 - alpha * (1 + beta) * rho) ** 2 + alpha ** 2 * rho ** 2
+                del_lambda = C_lambda ** 2 - 4 * (beta ** 2) * ((1 - alpha * lam) ** 2)
+
+                if del_lambda < 0:
+                    continue
+                else:
+                    sqrt_del_lambda = np.sqrt(del_lambda)
+                    if del_lambda >= 0 and np.isrealobj(sqrt_del_lambda) and (C_lambda + sqrt_del_lambda) >= 0:
+                        R_lambda = (1 / np.sqrt(2)) * np.sqrt(C_lambda + sqrt_del_lambda)
+
+                        if np.isrealobj(R_lambda) and not np.isnan(R_lambda) and R_lambda < 1:
+                            print("R_lambda is", R_lambda, "for valid alpha-beta pair: ", alpha, "and", beta)
+                            weights, loss_history, dist_history, _ = asg_ridge_regression_minibatch(
+                                X_train, y_train,
+                                lam=lam,
+                                lr=alpha,
+                                beta=beta,
+                                total_iterations=iterations,
+                                w_closed_form=w_star,
+                                batch_size=batch_size
+                            )
+                            final_dist = np.linalg.norm(weights - w_star)
+                            if not (np.any(np.isnan(final_dist)) or np.any(np.abs(final_dist) > 4)):
+                                final_loss = compute_loss(X_train, y_train, weights, lam)
+                                results.append((alpha, beta, final_dist, R_lambda))
+                                valid_params += 1
+                            else:
+                                print("Exploding gradients occur in this case, so we continue...")
+                        else:
+                            print(f"Skipping alpha={alpha}, beta={beta} due to invalid R_lambda: {R_lambda}")
+                            continue
+                    else:
+                        print(f"R_lambda is NaN or complex due to del_lambda: {del_lambda}, skipping...")
+                        continue
+
+            except Exception as e:
+                print(f"Error at alpha={alpha}, beta={beta}: {e}")
+                continue
+
+    if not results:
+        print("No valid (alpha, beta) combinations found.")
+        return None
+
+    results = np.array(results)
+
+    alphas = results[:, 0]
+    betas = results[:, 1]
+    distances = results[:, 2]
+    R_lambdas = results[:, 3]
+
+    log_distances = np.log1p(distances)  # log(1 + distance) for better contrast
+
+    # Plotting: log distance, quantiles, and R_lambda
+    plt.figure(figsize=(8, 15))
+
+    # Subplot 1: Pareto front with log distance coloring
+    plt.subplot(3, 1, 1)
+    scatter1 = plt.scatter(alphas, betas, c=log_distances, cmap='hsv_r', s=60, edgecolor='k')
+    plt.colorbar(scatter1, label='log(1 + Distance to Optimum)', fontsize=15)
+    plt.xlabel("Alpha (Learning Rate)", fontsize=15)
+    plt.ylabel("Beta (Momentum)", fontsize=15)
+    plt.title("Pareto Front: log(1 + Distance) Coloring", fontsize=15)
+    plt.tick_params(axis='both', labelsize=15)
+    plt.grid(True)
+
+    # Subplot 2: Quantile plot of final distances
+    plt.subplot(3, 1, 2)
+    sorted_distances = np.sort(distances)
+    quantiles = np.linspace(0, 1, len(sorted_distances))
+    plt.plot(quantiles, sorted_distances, marker='o')
+    plt.xlabel("Quantile", fontsize=15)
+    plt.ylabel("Distance to Optimum", fontsize=15)
+    plt.title("Quantile Plot of Final Distance", fontsize=15)
+    plt.tick_params(axis='both', labelsize=15)
+    plt.grid(True)
+
+    # Subplot 3: Pareto front with R_lambda coloring
+    plt.subplot(3, 1, 3)
+    scatter2 = plt.scatter(alphas, betas, c=R_lambdas, cmap='hsv_r', s=60, edgecolor='k')
+    plt.colorbar(scatter2, label='R_lambda', fontsize=15)
+    plt.xlabel("Alpha (Learning Rate)", fontsize=15)
+    plt.ylabel("Beta (Momentum)", fontsize=15)
+    plt.title("Pareto Front: R_lambda Coloring", fontsize=15)
+    plt.tick_params(axis='both', labelsize=15)
+    plt.grid(True)
+
+    plt.tight_layout()
+    plt.savefig(asg_config["plot"]["save_path_pareto"], format="svg")
+    plt.show()
+    print(f"Number of valid parameter combinations: {valid_params}")
+    print(f"Lowest R_lambda: {np.min(R_lambdas)} at (alpha, beta) = {results[np.argmin(R_lambdas), 0:2]}")
+    print(f"Highest R_lambda: {np.max(R_lambdas)} at (alpha, beta) = {results[np.argmax(R_lambdas), 0:2]}")
+    return results
+
+
 closed_form_value = closed_form_computation(X_train, y_train, asg_config["ridge_regression_minibatch"]["lambda"])
+pareto_results = generate_valid_pareto_front_new(
+    asg_config,
+    X_train,
+    y_train,
+    closed_form_value,
+    num_points=100
+)
+
+
+"""
+not being used
+"""
 # pareto_results = generate_valid_pareto_front(
 #     asg_config,
 #     X_train,

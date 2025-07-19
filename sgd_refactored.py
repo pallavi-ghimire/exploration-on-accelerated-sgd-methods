@@ -1,9 +1,7 @@
 import numpy as np
 import pandas as pd
-import math
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import mean_squared_error
 from matplotlib import pyplot as plt
 
 # Configuration
@@ -16,13 +14,13 @@ sgd_config = {
         "random_state": 1
     },
     "sgd": {
-        "lambda": 0.01,
+        "lambda": 1,
         "lr": 0.001,
-        "iterations": 40000,
-        "interval": 1000
+        "iterations": 2000,
+        "interval": 50
     },
     "plot": {
-        "save_path": "results/sgd/sgd_plot_test.svg"
+        "save_path": "results/sgd/sgd_plot_lambda_1_test.svg"
     }
 }
 
@@ -110,9 +108,9 @@ def get_largest_and_smallest_eigenvalue(lam, w_0, w_k, w_opt):
     # expectation_bound = phi ** k * (P(w_0) - P(w_opt))
 
     expectation_with = P(w_k) - P(w_opt)
-    expectation_error = eta * Q / 2 * mu
 
-    M_by_theta = expectation_with * 2 * mu / (eta * Q)
+    M_by_theta = expectation_with * 2 / (eta * Q)
+    expectation_error = eta * Q * M_by_theta / 2
 
     print(f"L = {L:.5f}")
     print(f"mu = {mu:.5f}")
@@ -121,9 +119,19 @@ def get_largest_and_smallest_eigenvalue(lam, w_0, w_k, w_opt):
     # print(f"phi = {phi:.5f}")
     # print(f"phi^k * (P(w_0) - P(w_*)) {k} epochs: {expectation_bound:.25e}")
     print(f"E[P(w_k)] - E[P(w_*)]): {expectation_with:.25e}")
+    # print("expectation error: ", expectation_error)
     print("M/theta (estimated) = ", M_by_theta)
 
     return alpha, Q, hessian
+
+
+def compute_ridge_loss(X, y, w, lam):
+    residual = X @ w - y
+    n = X.shape[0]
+    mse = (1 / n) * np.sum(residual ** 2)
+    reg = lam * np.sum(w ** 2)
+    return mse + reg
+
 
 
 def sgd_with_analytical_solution():
@@ -141,17 +149,21 @@ def sgd_with_analytical_solution():
 
     print("Closed-form w_*:", w_star)
     print("SGD weights w:", w_sgd)
-    print(f"Final Loss: {loss_history[-1]:.5f}")
+    # w_closed = closed_form_solution()
+    closed_form_loss = compute_ridge_loss(X_train, y_train, w_star, lam)
+
+    print("Final Loss:", loss_history[-1])
+    print("Closed-Form Loss: ", closed_form_loss)
     # print(f"RMSE on test set: {math.sqrt(mean_squared_error(y_test, X_test @ w_sgd)):.5f}")
 
     # Plotting
     x = np.arange(len(sgd_config["features"]))
     fig, axs = plt.subplots(3, 1, figsize=(12, 12))
 
-    label_fontsize = 14
-    tick_fontsize = 12
+    label_fontsize = 15
+    tick_fontsize = 15
     title_fontsize = 16
-    legend_fontsize = 12
+    legend_fontsize = 15
 
     # Plot 1: Weight comparison
     axs[0].plot(x, w_star, label="w_* (Closed-form)", marker='o')
@@ -165,12 +177,14 @@ def sgd_with_analytical_solution():
     axs[0].grid(True)
 
     # Plot 2: Loss history
-    axs[1].plot(range(1, len(loss_history) + 1), loss_history, marker='o')
+    axs[1].plot(range(1, len(loss_history) + 1), loss_history, marker='o', label='SGD Loss')
+    axs[1].axhline(y=closed_form_loss, color='red', linestyle='--', label='Closed-form Loss')
     axs[1].set_xlabel("Interval", fontsize=label_fontsize)
     axs[1].set_ylabel("Loss", fontsize=label_fontsize)
     axs[1].set_title("SGD Loss History", fontsize=title_fontsize)
     axs[1].tick_params(axis='both', labelsize=tick_fontsize)
     axs[1].grid(True)
+    axs[1].legend(fontsize=14)
 
     # Plot 3: Distance to optimal
     axs[2].plot(range(1, len(dist_history) + 1), dist_history, marker='o')

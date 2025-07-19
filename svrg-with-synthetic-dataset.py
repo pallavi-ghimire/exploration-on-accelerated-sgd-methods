@@ -9,8 +9,9 @@ from sklearn.preprocessing import StandardScaler
 # --------------------------
 svrg_config = {
     "data": {
-        "file_path": "dataset/n100000_d20_mu1_L3198.csv",
-        "features": [f"x{i}" for i in range(50)],
+        "file_path": "dataset/test/d25_mu1_L50.csv",
+        "file_path_optimal": "dataset/test/d25_mu1_L50_w_star",
+        "features": [f"x{i}" for i in range(25)],
         "target": "y",
     },
     "train_test_split": {
@@ -20,14 +21,15 @@ svrg_config = {
     "ridge_regression": {
         "lambda": 0.01,
         "lr": 0.01,
-        "epochs": 20,
-        "m": 1000,
+        "epochs": 12,
+        "m": 5000,
     },
     "spectral_analysis": {
         "lambda_eigen": 0.01,
     },
     "plot": {
         "interval": 1,
+        "save_path": 'results/svrg/synthetic/svrg_d_25_q_50_plot.svg'
     }
 }
 
@@ -41,8 +43,9 @@ y = df[svrg_config["data"]["target"]].values
 # --------------------------
 # Preprocessing
 # --------------------------
-scaler = StandardScaler()
-X_scaled = scaler.fit_transform(X)
+# scaler = StandardScaler()
+# X_scaled = scaler.fit_transform(X)
+X_scaled = X
 
 X_train, X_test, y_train, y_test = train_test_split(
     X_scaled, y,
@@ -63,16 +66,23 @@ def get_largest_eigenvalue(lam):
 
 
 def compute_loss(X, y, w, lam):
-    w_unscaled = w / scaler.scale_
-    X_unscaled = X * scaler.scale_
-    n = len(y)
+    w_unscaled = w
+    X_unscaled = X
+    # X_unscaled = X * scaler.scale_
     residuals = X_unscaled @ w_unscaled - y
-    return (1 / n) * np.sum(residuals ** 2) + lam * np.sum(w_unscaled ** 2)
+    return (1 / len(y)) * np.sum(residuals ** 2) + lam * np.sum(w_unscaled ** 2)
 
+
+# def closed_form_computation():
+#     sol = np.loadtxt("dataset/n100000_d20_mu1_L3198_w_star")
+#     return sol
 
 def closed_form_computation():
-    sol = np.loadtxt("dataset/n100000_d20_mu1_L3198_w_star")
-    return sol
+    n, d = X_train.shape
+    lam = svrg_config["ridge_regression"]["lambda"]
+    A = X_train.T @ X_train + lam * n * np.eye(d)
+    b = X_train.T @ y_train
+    return np.linalg.solve(A, b)
 
 def get_largest_and_smallest_eigenvalue(lam, w_0, w_k, w_opt):
     n_train = X_train.shape[0]
@@ -112,6 +122,13 @@ def get_largest_and_smallest_eigenvalue(lam, w_0, w_k, w_opt):
 
     return alpha, Q, hessian
 
+def compute_ridge_loss(X, y, w, lam):
+    residual = X @ w - y
+    n = X.shape[0]
+    mse = (1 / n) * np.sum(residual ** 2)
+    reg = lam * np.sum(w ** 2)
+    return mse + reg
+
 def svrg_ridge_regression(X, y, lam, lr, epochs, m):
     n, d = X.shape
     w_tilde = np.zeros(d)
@@ -149,7 +166,8 @@ def svrg_ridge_regression(X, y, lam, lr, epochs, m):
         w_tilde = sum(inner_iterates_w) / len(inner_iterates_w)
 
         if epoch % svrg_config["plot"]["interval"] == 0:
-            w_unscaled = w / scaler.scale_
+            # w_unscaled = w / scaler.scale_
+            w_unscaled = w
             # Loss is computed in scaled space (matches training)
             loss = compute_loss(X, y, w, lam)
 
@@ -161,7 +179,8 @@ def svrg_ridge_regression(X, y, lam, lr, epochs, m):
             dist_history.append(dist)
 
     # Return weights in unscaled space
-    w_unscaled = w / scaler.scale_
+    # w_unscaled = w / scaler.scale_
+    w_unscaled = w
     w_closed_unscaled = w_closed  # Already in unscaled space
 
     return w_unscaled, loss_history, dist_history, w_closed_unscaled, w_0
@@ -187,37 +206,54 @@ def svrg_with_analytical_solution_comparison():
     w, loss_history, dist_history, w_closed, w_0 = svrg_ridge_regression(
         X_train, y_train, lam, lr, epochs, m
     )
-    get_largest_and_smallest_eigenvalue(lam=lam, w_0=w_0, w_k=w, w_opt=w_0)
+    get_largest_and_smallest_eigenvalue(lam=lam, w_0=w_0, w_k=w, w_opt=w_closed)
 
     sigma = compute_sigma(X_train, y_train, w_closed, lam)
 
+    # w_closed = closed_form_solution()
+    closed_form_loss = compute_ridge_loss(X_train, y_train, w_closed, lam)
+
     print("Final Loss:", loss_history[-1])
+    print("Closed-Form Loss: ", closed_form_loss)
 
     x = np.arange(len(svrg_config["data"]["features"]))
-    fig, axs = plt.subplots(3, 1, figsize=(12, 12))
 
-    axs[0].plot(x, w_closed, label="w_* (Closed-form)", marker='o')
-    axs[0].plot(x, w, label="w (SVRG)", marker='x')
-    axs[0].set_xticks(x)
-    axs[0].set_xticklabels(svrg_config["data"]["features"], rotation=45)
-    axs[0].set_ylabel("Weight Value")
-    axs[0].set_title("Comparison of w (SVRG) vs w_* (Closed-form)")
-    axs[0].legend()
+    fig, axs = plt.subplots(2, 1, figsize=(8, 10))
+
+    # Loss plot
+    axs[0].plot(
+        np.arange(1, len(loss_history) + 1) * svrg_config["plot"]["interval"],
+        loss_history,
+        marker='o', label='SVRG Loss'
+    )
+    axs[0].axhline(y=closed_form_loss, color='red', linestyle='--', label='Closed-form Loss')
+
+    axs[0].set_xlabel("Iteration", fontsize=15)
+    axs[0].set_ylabel("Loss", fontsize=15)
+    axs[0].tick_params(axis='both', labelsize=15)
+    axs[0].set_title("SVRG Optimization History", fontsize=15)
     axs[0].grid(True)
+    axs[0].legend(fontsize=15)
+    # axs[0].set_xlabel("Iteration", fontsize=13)
+    # axs[0].set_ylabel("Loss", fontsize=13)
+    # axs[0].tick_params(axis='both', labelsize=14)
+    # axs[0].set_title("SVRG Optimization History", fontsize=15)
+    # axs[0].grid(True)
 
-    axs[1].plot(range(1, len(loss_history) + 1), loss_history, marker='o')
-    axs[1].set_xlabel("Epoch")
-    axs[1].set_ylabel("Loss (Scaled Space)")
-    axs[1].set_title("SVRG Optimization History (Loss)")
+    # Distance plot
+    axs[1].plot(
+        np.arange(1, len(dist_history) + 1) * svrg_config["plot"]["interval"],
+        dist_history,
+        marker='o'
+    )
+    axs[1].set_xlabel("Iteration", fontsize=15)
+    axs[1].set_ylabel("||w - w*||", fontsize=15)
+    axs[1].tick_params(axis='both', labelsize=15)
+    axs[1].set_title("Distance from Closed-form Solution", fontsize=15)
     axs[1].grid(True)
 
-    axs[2].plot(range(1, len(dist_history) + 1), dist_history, marker='o')
-    axs[2].set_xlabel("Epoch")
-    axs[2].set_ylabel("||w - w*||")
-    axs[2].set_title("Distance between SVRG Weight and Closed-form Solution")
-    axs[2].grid(True)
-
     plt.tight_layout()
+    plt.savefig(svrg_config["plot"]["save_path"], format="svg")
     plt.show()
 
     return sigma
