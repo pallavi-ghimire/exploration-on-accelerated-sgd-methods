@@ -17,10 +17,10 @@ sgd_config = {
         "lambda": 1,
         "lr": 0.001,
         "iterations": 2000,
-        "interval": 50
+        "interval": 10
     },
     "plot": {
-        "save_path": "results/sgd/sgd_plot_lambda_1_test.svg"
+        "save_path": "results/sgd/sgd_plot_lambda_1_final.svg"
     }
 }
 
@@ -104,9 +104,6 @@ def get_largest_and_smallest_eigenvalue(lam, w_0, w_k, w_opt):
     def P(w):
         return compute_loss(X_train, y_train, w, lam)
 
-    # Convergence bound for function value
-    # expectation_bound = phi ** k * (P(w_0) - P(w_opt))
-
     expectation_with = P(w_k) - P(w_opt)
 
     M_by_theta = expectation_with * 2 / (eta * Q)
@@ -116,10 +113,7 @@ def get_largest_and_smallest_eigenvalue(lam, w_0, w_k, w_opt):
     print(f"mu = {mu:.5f}")
     print(f"Q = {Q:.5f}")
     print(f"alpha (1/L) = {alpha:.5f}")
-    # print(f"phi = {phi:.5f}")
-    # print(f"phi^k * (P(w_0) - P(w_*)) {k} epochs: {expectation_bound:.25e}")
     print(f"E[P(w_k)] - E[P(w_*)]): {expectation_with:.25e}")
-    # print("expectation error: ", expectation_error)
     print("M/theta (estimated) = ", M_by_theta)
 
     return alpha, Q, hessian
@@ -154,7 +148,6 @@ def sgd_with_analytical_solution():
 
     print("Final Loss:", loss_history[-1])
     print("Closed-Form Loss: ", closed_form_loss)
-    # print(f"RMSE on test set: {math.sqrt(mean_squared_error(y_test, X_test @ w_sgd)):.5f}")
 
     # Plotting
     x = np.arange(len(sgd_config["features"]))

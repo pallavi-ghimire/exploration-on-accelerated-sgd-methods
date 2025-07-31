@@ -2,19 +2,17 @@ import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
 
 # --------------------------
 # Centralized Configuration
 # --------------------------
 sgd_config = {
     "data": {
-        # "file_path": "dataset/sgd/d50_mu1_L50.csv",
-        "file_path": "dataset/test/d25_mu1_L50.csv",
-        "file_path_optimal": "dataset/test/d25_mu1_L50_w_star",
-        # "file_path_optimal": "dataset/sgd/d50_mu1_L50_w_star",
-        "features": [f"x{i}" for i in range(25)],
+        "file_path": "dataset/test/d10_mu1_L10.csv",
+        "file_path_optimal": "dataset/test/d10_mu1_L10_w_star",
+        "features": [f"x{i}" for i in range(10)],
         "target": "y",
+        "d": 10,
     },
     "train_test_split": {
         "test_size": 0.2,
@@ -23,11 +21,11 @@ sgd_config = {
     "ridge_regression": {
         "lambda": 0.01,
         "lr": 0.01,
-        "iterations": 30000,
+        "iterations": 6000,
     },
     "plot": {
-        "interval": 500,
-        "save_path": "results/sgd/synthetic/sgd_d_25_Q_50.svg"
+        "interval": 100,
+        "save_path": "results/sgd/synthetic/sgd_d_10_Q_10_final.svg"
     },
 }
 
@@ -195,33 +193,25 @@ def sgd_with_analytical_solution_comparison():
     al, q, hess = get_largest_and_smallest_eigenvalue(lam=lam, w_0=w_0, w_k=w, w_opt=w_star)
 
     x = np.arange(len(sgd_config["data"]["features"]))
-    # fig, axs = plt.subplots(3, 1, figsize=(12, 12))
     fig, axs = plt.subplots(2, 1, figsize=(8, 10))
-
-    # axs[0].plot(np.arange(1, len(loss_history) + 1) * sgd_config["plot"]["interval"], loss_history, marker='o')
-    # axs[0].set_xlabel("Iteration", fontsize=13)
-    # axs[0].set_ylabel("Loss", fontsize=13)
-    # axs[0].tick_params(axis='both', labelsize=14)
-    # axs[0].set_title("SGD Optimization History", fontsize=15)
-    # axs[0].grid(True)
 
     axs[0].plot(np.arange(1, len(loss_history) + 1) * sgd_config["plot"]["interval"],
                 loss_history, marker='o', label='SGD Loss')
 
     axs[0].axhline(y=closed_form_loss, color='red', linestyle='--', label='Closed-form Loss')
 
-    axs[0].set_xlabel("Iteration", fontsize=15)
-    axs[0].set_ylabel("Loss", fontsize=15)
-    axs[0].tick_params(axis='both', labelsize=15)
-    axs[0].set_title("SGD Optimization History", fontsize=15)
+    axs[0].set_xlabel("Iteration", fontsize=18)
+    axs[0].set_ylabel("Loss", fontsize=18)
+    axs[0].tick_params(axis='both', labelsize=16)
+    axs[0].set_title("SGD Optimization History", fontsize=18)
     axs[0].grid(True)
     axs[0].legend(fontsize=15)
 
     axs[1].plot(np.arange(1, len(dist_history) + 1) * sgd_config["plot"]["interval"], dist_history, marker='o')
-    axs[1].set_xlabel("Iteration", fontsize=15)
-    axs[1].set_ylabel("||w - w*||", fontsize=15)
-    axs[1].tick_params(axis='both', labelsize=15)
-    axs[1].set_title("Distance from Closed-form Solution", fontsize=15)
+    axs[1].set_xlabel("Iteration", fontsize=18)
+    axs[1].set_ylabel("||w - w*||", fontsize=18)
+    axs[1].tick_params(axis='both', labelsize=16)
+    axs[1].set_title("Distance from Closed-form Solution", fontsize=18)
     axs[1].grid(True)
 
     plt.tight_layout()
@@ -234,4 +224,4 @@ def sgd_with_analytical_solution_comparison():
 if __name__ == "__main__":
     sgd_with_analytical_solution_comparison()
 
-print(estimate_flops_ridge_regression_no_logging(n=80000, d=25, T=sgd_config["ridge_regression"]["iterations"]))
+print(estimate_flops_ridge_regression_no_logging(n=80000, d=sgd_config["data"]["d"], T=sgd_config["ridge_regression"]["iterations"]))

@@ -22,7 +22,7 @@ svrg_config = {
         "m": 200,
     },
     "plot": {
-        "save_path": "results/svrg/svrg_real_lambda_1.svg"
+        "save_path": "results/svrg/svrg_plot_lambda_1_final.svg"
     }
 }
 
@@ -185,7 +185,7 @@ def svrg_with_analytical_solution():
     axs[1].set_title("SVRG Loss History", fontsize=title_fontsize)
     axs[1].tick_params(axis='both', labelsize=tick_fontsize)
     axs[1].grid(True)
-    axs[1].legend(fontsize=14)
+    axs[1].legend(fontsize=15)
 
     # Plot 3: Distance to optimal
     axs[2].plot(range(1, len(dist_history) + 1), dist_history, marker='o')
@@ -277,61 +277,3 @@ def estimate_flops_closed_form_and_svrg(n, d, T_svrg, m, lam=0.01):
     }
 
 print(estimate_flops_closed_form_and_svrg(n=18658, d=5, T_svrg=svrg_config["svrg"]["epochs"], m=svrg_config["svrg"]["m"], lam = svrg_config["svrg"]["lambda"]))
-
-
-#
-# def get_largest_and_smallest_eigenvalue(lam, w_0, w_opt):
-#     n_train = X_train.shape[0]
-#     hessian = 2 * (X_train.T @ X_train) / n_train + 2 * lam * np.eye(X_train.shape[1])
-#     eigenvalues = np.linalg.eigvals(hessian)
-#     L = np.max(eigenvalues)
-#     print("L is", L)
-#     mu = np.min(eigenvalues)
-#     print("mu is", mu)
-#     Q = L / mu
-#     print("Q is", Q)
-#     alpha = 1 / L
-#     phi = Q / svrg_config["svrg"]["m"] * L * (1 - 2 * L * svrg_config["svrg"]["lr"]) + 2 * L * alpha / (
-#                 1 - 2 * L * svrg_config["svrg"]["lr"])
-#     print("phi is", phi)
-#     print("Expectation is", phi ^ svrg_config["svrg"]["epochs"] * (w_0 - w_opt))
-#     return alpha, Q, hessian
-
-# def get_largest_and_smallest_eigenvalue(lam, w_0, w_opt):
-#     n_train = X_train.shape[0]
-#     d = X_train.shape[1]
-#
-#     # Hessian of the ridge regression loss
-#     hessian = 2 * (X_train.T @ X_train) / n_train + 2 * lam * np.eye(d)
-#     eigenvalues = np.linalg.eigvals(hessian)
-#     L = np.max(eigenvalues)    # Smoothness constant
-#     mu = np.min(eigenvalues)   # Strong convexity constant
-#     Q = L / mu                 # Condition number
-#     alpha = 1 / L              # Ideal learning rate
-#
-#     eta = svrg_config["svrg"]["lr"]
-#     m = svrg_config["svrg"]["m"]
-#     k = svrg_config["svrg"]["epochs"]
-#
-#     # Convergence rate constant phi (as derived from SVRG analysis)
-#     phi = Q / (m * (1 - 2 * L * eta)) + (2 * L * eta) / (1 - 2 * L * eta)
-#
-#     # Loss function
-#     def P(w):
-#         return compute_loss(X_train, y_train, w, lam)
-#
-#     # Convergence bound for function value
-#     expectation_bound = phi ** k * (P(w_0) - P(w_opt))
-#     expectation_with
-#
-#     print(f"L = {L:.5f}")
-#     print(f"mu = {mu:.5f}")
-#     print(f"Q = {Q:.5f}")
-#     print(f"alpha (1/L) = {alpha:.5f}")
-#     print(f"phi = {phi:.5f}")
-#     print(f"Expected suboptimality after {k} epochs: {expectation_bound:.5e}")
-#
-#     return alpha, Q, hessian
-
-
-# alpha, Q, hess = get_largest_and_smallest_eigenvalue(svrg_config["svrg"]["lambda"])

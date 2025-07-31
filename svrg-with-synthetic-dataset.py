@@ -2,17 +2,17 @@ import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
 
 # --------------------------
 # Centralized Configuration
 # --------------------------
 svrg_config = {
     "data": {
-        "file_path": "dataset/test/d25_mu1_L50.csv",
-        "file_path_optimal": "dataset/test/d25_mu1_L50_w_star",
-        "features": [f"x{i}" for i in range(25)],
+        "file_path": "dataset/test/d10_mu1_L10.csv",
+        "file_path_optimal": "dataset/test/d10_mu1_L10_w_star",
+        "features": [f"x{i}" for i in range(10)],
         "target": "y",
+        "d": 10,
     },
     "train_test_split": {
         "test_size": 0.2,
@@ -21,15 +21,15 @@ svrg_config = {
     "ridge_regression": {
         "lambda": 0.01,
         "lr": 0.01,
-        "epochs": 12,
-        "m": 5000,
+        "epochs": 5,
+        "m": 6500,
     },
     "spectral_analysis": {
         "lambda_eigen": 0.01,
     },
     "plot": {
         "interval": 1,
-        "save_path": 'results/svrg/synthetic/svrg_d_25_q_50_plot.svg'
+        "save_path": 'results/svrg/synthetic/svrg_d_10_Q_10_final.svg'
     }
 }
 
@@ -228,17 +228,12 @@ def svrg_with_analytical_solution_comparison():
     )
     axs[0].axhline(y=closed_form_loss, color='red', linestyle='--', label='Closed-form Loss')
 
-    axs[0].set_xlabel("Iteration", fontsize=15)
-    axs[0].set_ylabel("Loss", fontsize=15)
-    axs[0].tick_params(axis='both', labelsize=15)
-    axs[0].set_title("SVRG Optimization History", fontsize=15)
+    axs[0].set_xlabel("Iteration", fontsize=18)
+    axs[0].set_ylabel("Loss", fontsize=18)
+    axs[0].tick_params(axis='both', labelsize=16)
+    axs[0].set_title("SVRG Optimization History", fontsize=18)
     axs[0].grid(True)
-    axs[0].legend(fontsize=15)
-    # axs[0].set_xlabel("Iteration", fontsize=13)
-    # axs[0].set_ylabel("Loss", fontsize=13)
-    # axs[0].tick_params(axis='both', labelsize=14)
-    # axs[0].set_title("SVRG Optimization History", fontsize=15)
-    # axs[0].grid(True)
+    axs[0].legend(fontsize=18)
 
     # Distance plot
     axs[1].plot(
@@ -246,10 +241,10 @@ def svrg_with_analytical_solution_comparison():
         dist_history,
         marker='o'
     )
-    axs[1].set_xlabel("Iteration", fontsize=15)
-    axs[1].set_ylabel("||w - w*||", fontsize=15)
-    axs[1].tick_params(axis='both', labelsize=15)
-    axs[1].set_title("Distance from Closed-form Solution", fontsize=15)
+    axs[1].set_xlabel("Iteration", fontsize=18)
+    axs[1].set_ylabel("||w - w*||", fontsize=18)
+    axs[1].tick_params(axis='both', labelsize=16)
+    axs[1].set_title("Distance from Closed-form Solution", fontsize=18)
     axs[1].grid(True)
 
     plt.tight_layout()
@@ -303,9 +298,6 @@ def estimate_flops_closed_form_and_svrg(n, d, T_svrg, m, lam=0.01):
         "svrg_flops": int(flops_svrg)
     }
 
-print(estimate_flops_closed_form_and_svrg(n=80000, d=50, T_svrg=svrg_config["ridge_regression"]["epochs"], m=svrg_config["ridge_regression"]["m"], lam = svrg_config["ridge_regression"]["lambda"]))
-
-
 # --------------------------
 # Run
 # --------------------------
@@ -313,3 +305,7 @@ if __name__ == "__main__":
     L = get_largest_eigenvalue(svrg_config["spectral_analysis"]["lambda_eigen"])
     sigma = svrg_with_analytical_solution_comparison()
     # print("Sigma (gradient noise):", sigma)
+    print(estimate_flops_closed_form_and_svrg(n=80000, d=svrg_config["data"]["d"], T_svrg=svrg_config["ridge_regression"]["epochs"],
+                                              m=svrg_config["ridge_regression"]["m"],
+                                              lam=svrg_config["ridge_regression"]["lambda"]))
+

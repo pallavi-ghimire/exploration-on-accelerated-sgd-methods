@@ -9,10 +9,11 @@ from sklearn.preprocessing import StandardScaler
 # --------------------------
 asg_config = {
     "data": {
-        "file_path": "dataset/test/d50_mu1_L50.csv",
-        "file_path_optimal": "dataset/test/d50_mu1_L50_w_star",
-        "features": [f"x{i}" for i in range(50)],
+        "file_path": "dataset/test/d10_mu1_L10.csv",
+        "file_path_optimal": "dataset/test/d10_mu1_L10_w_star",
+        "features": [f"x{i}" for i in range(10)],
         "target": "y",
+        "d": 10,
     },
     "train_test_split": {
         "test_size": 0.2,
@@ -24,17 +25,17 @@ asg_config = {
         "beta": 0.48,
         "iterations": 2000,
         "noise_std": 0.05,
-        "batch_size": 150
+        "batch_size": 80
     },
     "spectral_analysis": {
         "lambda_eigen": 0.01,
-        "eta": 0.001,
-        "beta": 0.04,
+        "eta": 0.01,
+        "beta": 0.48,
     },
     "plot": {
         "interval": 20,
-        "save_path": "results/asg/synthetic/asg_syn_d_50_Q_50.svg",
-        "save_path_pareto": "results/asg/synthetic/asg_syn_d_50_Q_50_pareto.svg"
+        "save_path": "results/asg/synthetic/asg_d_10_Q_10_final.svg",
+        "save_path_pareto": "results/asg/synthetic/asg_d_10_Q_10_pareto.svg"
     }
 }
 
@@ -366,10 +367,10 @@ def asg_with_analytical_solution_comparison():
     )
     axs[0].axhline(y=closed_form_loss, color='red', linestyle='--', label='Closed-form Loss')
 
-    axs[0].set_xlabel("Iteration", fontsize=13)
-    axs[0].set_ylabel("Loss", fontsize=13)
-    axs[0].tick_params(axis='both', labelsize=14)
-    axs[0].set_title("SVRG Optimization History", fontsize=15)
+    axs[0].set_xlabel("Iteration", fontsize=15)
+    axs[0].set_ylabel("Loss", fontsize=15)
+    axs[0].tick_params(axis='both', labelsize=15)
+    axs[0].set_title("ASG Optimization History", fontsize=15)
     axs[0].grid(True)
     axs[0].legend(fontsize=12)
 
@@ -521,10 +522,11 @@ def generate_valid_pareto_front_new(
     # Subplot 1: Pareto front with log distance coloring
     plt.subplot(2, 1, 1)
     scatter1 = plt.scatter(alphas, betas, c=log_distances, cmap='hsv_r', s=60, edgecolor='k')
-    plt.colorbar(scatter1, label='log(1 + Distance to Optimum)')
-    plt.xlabel("Alpha (Learning Rate)")
-    plt.ylabel("Beta (Momentum)")
-    plt.title("Pareto Front: log(1 + Distance) Coloring")
+    cbar1 = plt.colorbar(scatter1)
+    cbar1.set_label('log(1 + Distance to Optimum)', fontsize=18)
+    plt.xlabel("Alpha (Learning Rate)", fontsize=18)
+    plt.ylabel("Beta (Momentum)", fontsize=18)
+    plt.title("Pareto Front: log(1 + Distance) Coloring", fontsize=18)
     plt.grid(True)
 
     # Subplot 2: Quantile plot of final distances
@@ -540,10 +542,11 @@ def generate_valid_pareto_front_new(
     # Subplot 3: Pareto front with R_lambda coloring
     plt.subplot(2, 1, 2)
     scatter2 = plt.scatter(alphas, betas, c=R_lambdas, cmap='hsv_r', s=60, edgecolor='k')
-    plt.colorbar(scatter2, label='R_lambda')
-    plt.xlabel("Alpha (Learning Rate)")
-    plt.ylabel("Beta (Momentum)")
-    plt.title("Pareto Front: R_lambda Coloring")
+    cbar2 = plt.colorbar(scatter2)
+    cbar2.set_label('R_lambda', fontsize=18)
+    plt.xlabel("Alpha (Learning Rate)", fontsize=18)
+    plt.ylabel("Beta (Momentum)", fontsize=18)
+    plt.title("Pareto Front: R_lambda Coloring", fontsize=18)
     plt.grid(True)
 
     plt.tight_layout()
@@ -591,7 +594,7 @@ def estimate_flops_closed_form_and_asg_minibatch(n, d, T_asg, batch_size):
     }
 
 
-print(estimate_flops_closed_form_and_asg_minibatch(n=80000, d=50, T_asg=asg_config["ridge_regression_minibatch"]["iterations"], batch_size=asg_config["ridge_regression_minibatch"]["batch_size"]))
+print(estimate_flops_closed_form_and_asg_minibatch(n=80000, d=asg_config["data"]["d"], T_asg=asg_config["ridge_regression_minibatch"]["iterations"], batch_size=asg_config["ridge_regression_minibatch"]["batch_size"]))
 
 
 def asg_minibatch_comparison(w_closed_form, batch_size=32):
@@ -649,12 +652,12 @@ def asg_minibatch_comparison(w_closed_form, batch_size=32):
     )
     axs[0].axhline(y=closed_form_loss, color='red', linestyle='--', label='Closed-form Loss')
 
-    axs[0].set_xlabel("Iteration", fontsize=15)
-    axs[0].set_ylabel("Loss", fontsize=15)
-    axs[0].tick_params(axis='both', labelsize=15)
-    axs[0].set_title("ASG Optimization History", fontsize=15)
+    axs[0].set_xlabel("Iteration", fontsize=18)
+    axs[0].set_ylabel("Loss", fontsize=18)
+    axs[0].tick_params(axis='both', labelsize=18)
+    axs[0].set_title("ASG Optimization History", fontsize=18)
     axs[0].grid(True)
-    axs[0].legend(fontsize=15)
+    axs[0].legend(fontsize=18)
 
     # Distance plot
     axs[1].plot(
@@ -662,23 +665,23 @@ def asg_minibatch_comparison(w_closed_form, batch_size=32):
         dist_history,
         marker='o'
     )
-    axs[1].set_xlabel("Iteration", fontsize=15)
-    axs[1].set_ylabel("||w - w*||", fontsize=15)
-    axs[1].tick_params(axis='both', labelsize=15)
-    axs[1].set_title("Distance from Closed-form Solution", fontsize=15)
+    axs[1].set_xlabel("Iteration", fontsize=18)
+    axs[1].set_ylabel("||w - w*||", fontsize=18)
+    axs[1].tick_params(axis='both', labelsize=18)
+    axs[1].set_title("Distance from Closed-form Solution", fontsize=18)
     axs[1].grid(True)
 
     plt.tight_layout()
     plt.savefig(asg_config["plot"]["save_path"], format="svg")
     plt.show()
 
-    generate_valid_pareto_front_new(
-        asg_config,
-        X_train,
-        y_train,
-        w_closed_form,
-        num_points=100
-    )
+    # generate_valid_pareto_front_new(
+    #     asg_config,
+    #     X_train,
+    #     y_train,
+    #     w_closed_form,
+    #     num_points=100
+    # )
 
 
 asg_minibatch_comparison(
