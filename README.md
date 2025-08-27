@@ -9,6 +9,7 @@ There already is a sample real-world dataset obtained from Kaggle: https://www.k
 This is saved in the dataset folder as SPX_clean.csv. Additionally, synthetic datasets can be generated using the file named synthetic_dataset_generator.py inside dataset/synthetic folder by specifying the desired file name. 
 
 ### synthetic_dataset_generator.py
+WIP
 
 ## Optimizer Implementations
 All of the optimizers are implemented in the file names starting with the name of the optimizer. 
