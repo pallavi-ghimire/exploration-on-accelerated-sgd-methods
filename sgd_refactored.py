@@ -20,7 +20,7 @@ sgd_config = {
         "interval": 10
     },
     "plot": {
-        "save_path": "results/sgd/sgd_plot_lambda_1_final.svg"
+        "save_path": "results/sgd/name_of_file.svg"
     }
 }
 
@@ -197,14 +197,6 @@ def estimate_flops_ridge_regression_no_logging(n, d, T):
     Estimate the number of floating point operations (FLOPs) for:
     - Closed-form ridge regression
     - SGD ridge regression (excluding any logging)
-
-    Parameters:
-        n (int): Number of training samples
-        d (int): Number of features
-        T (int): Number of SGD iterations
-
-    Returns:
-        dict: Dictionary with estimated FLOP counts for each method (integers)
     """
     # Closed-form FLOPs:
     # 2nd^2 + 2nd + 2d^2 + (2/3)d^3
