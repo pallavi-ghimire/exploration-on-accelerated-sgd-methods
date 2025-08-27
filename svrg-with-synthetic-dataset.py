@@ -8,8 +8,8 @@ from sklearn.model_selection import train_test_split
 # --------------------------
 svrg_config = {
     "data": {
-        "file_path": "dataset/test/d10_mu1_L10.csv",
-        "file_path_optimal": "dataset/test/d10_mu1_L10_w_star",
+        "file_path": "dataset/synthetic/d10_mu1_L10.csv",
+        "file_path_optimal": "dataset/synthetic/d10_mu1_L10_w_star",
         "features": [f"x{i}" for i in range(10)],
         "target": "y",
         "d": 10,
