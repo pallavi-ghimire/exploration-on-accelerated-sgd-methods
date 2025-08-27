@@ -146,16 +146,13 @@ def get_asg_convergence_properties(lam, w_0, w_k, w_opt, alpha, beta):
     """
     Compute ASG-specific spectral properties and convergence estimates.
 
-    Parameters:
-        lam (float): Ridge regularization parameter
-        w_0 (np.ndarray): Initial weights
-        w_k (np.ndarray): Final weights from ASG
-        w_opt (np.ndarray): Closed-form optimal solution
-        alpha (float): Step size (learning rate)
-        beta (float): Momentum parameter
-
-    Returns:
-        tuple: (rho, alpha, beta, C_lambda, R_lambda)
+    the lambda is obtained as the maximum eigenvalue of the Hessian
+    the eta and beta are obtained at random, such that the following condition is satisfied:
+    R_lambda < 1
+    where,
+    R_lambda = (1/2^n) * sqrt((C_lambda + sqrt(del_lambda))),
+    C_lambda = 1 - eta * (1+b) * lambda
+    del_lambda = C_lambda^2 - 4*(b^2) + (b^2 + 1)
     """
     n_train = X_train.shape[0]
     d = X_train.shape[1]
@@ -363,39 +360,11 @@ def asg_minibatch_comparison(w_closed_form, batch_size=32):
     plt.show()
 
 
-"""
-the lambda is obtained as the maximum eigenvalue of the Hessian
-the eta and beta are obtained at random, such that the following condition is satisfied:
-R_lambda < 1
-where,
-R_lambda = (1/2^n) * sqrt((C_lambda + sqrt(del_lambda))),
-C_lambda = 1 - eta * (1+b) * lambda
-del_lambda = C_lambda^2 - 4*(b^2) + (b^2 + 1)
-
-sigma was calculated to be 3.673290121568296
-
-this portion is now included inside another function
-"""
-
-asg_minibatch_comparison(
-    w_closed_form=closed_form_computation(X_train, y_train, asg_config["ridge_regression_minibatch"]["lambda"]),
-    batch_size=asg_config["ridge_regression_minibatch"]["batch_size"])
-
-
 def estimate_flops_closed_form_and_asg_minibatch(n, d, T_asg, batch_size):
     """
     Estimate FLOPs for:
     - Closed-form ridge regression
     - ASG ridge regression with minibatching
-
-    Parameters:
-        n (int): Number of training samples
-        d (int): Number of features
-        T_asg (int): Number of ASG iterations
-        batch_size (int): Mini-batch size used per iteration
-
-    Returns:
-        dict: Estimated FLOPs for closed-form and ASG minibatch
     """
     # === Closed-form ===
     # 2nd^2 + 2nd + 2d^2 + (2/3)d^3
@@ -420,14 +389,10 @@ def estimate_flops_closed_form_and_asg_minibatch(n, d, T_asg, batch_size):
     }
 
 
-print(estimate_flops_closed_form_and_asg_minibatch(n=18658, d=5, T_asg=asg_config["ridge_regression_minibatch"]["iterations"], batch_size=asg_config["ridge_regression_minibatch"]["batch_size"]))
-
-
 """
 new pareto chart
 """
-
-def generate_valid_pareto_front_new(
+def generate_valid_pareto_front(
     asg_config,
     X_train,
     y_train,
@@ -552,11 +517,23 @@ def generate_valid_pareto_front_new(
     return results
 
 
-closed_form_value = closed_form_computation(X_train, y_train, asg_config["ridge_regression_minibatch"]["lambda"])
-# pareto_results = generate_valid_pareto_front_new(
-#     asg_config,
-#     X_train,
-#     y_train,
-#     closed_form_value,
-#     num_points=100
-# )
+# --------------------------
+# Run
+# --------------------------
+if __name__ == "__main__":
+    closed_form_value = closed_form_computation(X_train, y_train, asg_config["ridge_regression_minibatch"]["lambda"])
+    asg_minibatch_comparison(
+        w_closed_form=closed_form_computation(X_train, y_train, asg_config["ridge_regression_minibatch"]["lambda"]),
+        batch_size=asg_config["ridge_regression_minibatch"]["batch_size"])
+    pareto_results = generate_valid_pareto_front(
+        asg_config,
+        X_train,
+        y_train,
+        closed_form_value,
+        num_points=100
+    )
+    print(estimate_flops_closed_form_and_asg_minibatch(n=18658, d=5,
+                                                       T_asg=asg_config["ridge_regression_minibatch"]["iterations"],
+                                                       batch_size=asg_config["ridge_regression_minibatch"][
+                                                           "batch_size"]))
+

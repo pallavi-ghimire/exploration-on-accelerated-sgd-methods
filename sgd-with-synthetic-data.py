@@ -8,8 +8,8 @@ from sklearn.model_selection import train_test_split
 # --------------------------
 sgd_config = {
     "data": {
-        "file_path": "dataset/synthetic/d10_mu1_L10.csv",
-        "file_path_optimal": "dataset/synthetic/d10_mu1_L10_w_star",
+        "file_path": "dataset/synthetic/name_of_file",
+        "file_path_optimal": "dataset/synthetic/name_of_file_w_star",
         "features": [f"x{i}" for i in range(10)],
         "target": "y",
         "d": 10,
@@ -25,7 +25,7 @@ sgd_config = {
     },
     "plot": {
         "interval": 100,
-        "save_path": "results/sgd/synthetic/sgd_d_10_Q_10_final.svg"
+        "save_path": "results/sgd/synthetic/name_of_file.svg"
     },
 }
 
@@ -37,7 +37,7 @@ X = df[sgd_config["data"]["features"]].values
 y = df[sgd_config["data"]["target"]].values
 
 # --------------------------
-# Preprocessing
+# Preprocessing: scale data here if necessary
 # --------------------------
 # scaler = StandardScaler()
 # X_scaled = scaler.fit_transform(X)
@@ -109,14 +109,6 @@ def estimate_flops_ridge_regression_no_logging(n, d, T):
     Estimate the number of floating point operations (FLOPs) for:
     - Closed-form ridge regression
     - SGD ridge regression (excluding any logging)
-
-    Parameters:
-        n (int): Number of training samples
-        d (int): Number of features
-        T (int): Number of SGD iterations
-
-    Returns:
-        dict: Dictionary with estimated FLOP counts for each method (integers)
     """
     # Closed-form FLOPs:
     # 2nd^2 + 2nd + 2d^2 + (2/3)d^3
@@ -165,8 +157,6 @@ def get_largest_and_smallest_eigenvalue(lam, w_0, w_k, w_opt):
     print(f"mu = {mu:.5f}")
     print(f"Q = {Q:.5f}")
     print(f"alpha (1/L) = {alpha:.5f}")
-    # print(f"phi = {phi:.5f}")
-    # print(f"phi^k * (P(w_0) - P(w_*)) {k} epochs: {expectation_bound:.25e}")
     print(f"E[P(w_k)] - E[P(w_*)]): {expectation_with:.25e}")
     print("M/theta (estimated) = ", M_by_theta)
 
@@ -223,5 +213,4 @@ def sgd_with_analytical_solution_comparison():
 # --------------------------
 if __name__ == "__main__":
     sgd_with_analytical_solution_comparison()
-
-print(estimate_flops_ridge_regression_no_logging(n=80000, d=sgd_config["data"]["d"], T=sgd_config["ridge_regression"]["iterations"]))
+    print(estimate_flops_ridge_regression_no_logging(n=80000, d=sgd_config["data"]["d"], T=sgd_config["ridge_regression"]["iterations"]))

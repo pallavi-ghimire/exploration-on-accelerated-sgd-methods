@@ -1,5 +1,12 @@
 """
+Although this was the starting point, later the topic was adjusted to focus more on the accelerated stochastic methods
+ASG and SVRG, for which a twice-differentiable function was used (ridge regression).
+However, this file is stored for record-keeping.
+
+
+
 This file implements Linear Regression in order to set up benchmark scores for the thesis to build upon.
+
 Scores are tallied with the paper by Singh, Gurjeet (2022) - Machine Learning Models in Stock Market Prediction
 
 Implementation of Linear Regression is done in 2 forms:

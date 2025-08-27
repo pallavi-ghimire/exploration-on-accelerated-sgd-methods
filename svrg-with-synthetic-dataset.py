@@ -8,8 +8,8 @@ from sklearn.model_selection import train_test_split
 # --------------------------
 svrg_config = {
     "data": {
-        "file_path": "dataset/synthetic/d10_mu1_L10.csv",
-        "file_path_optimal": "dataset/synthetic/d10_mu1_L10_w_star",
+        "file_path": "dataset/synthetic/name_of_file",
+        "file_path_optimal": "dataset/synthetic/name_of_file_w_star",
         "features": [f"x{i}" for i in range(10)],
         "target": "y",
         "d": 10,
@@ -29,7 +29,7 @@ svrg_config = {
     },
     "plot": {
         "interval": 1,
-        "save_path": 'results/svrg/synthetic/svrg_d_10_Q_10_final.svg'
+        "save_path": 'results/svrg/synthetic/name_of_file.svg'
     }
 }
 
@@ -73,6 +73,7 @@ def compute_loss(X, y, w, lam):
     return (1 / len(y)) * np.sum(residuals ** 2) + lam * np.sum(w_unscaled ** 2)
 
 
+# this is for the case where the solution is already computed for closed_form during data generation
 # def closed_form_computation():
 #     sol = np.loadtxt("dataset/n100000_d20_mu1_L3198_w_star")
 #     return sol
@@ -304,7 +305,6 @@ def estimate_flops_closed_form_and_svrg(n, d, T_svrg, m, lam=0.01):
 if __name__ == "__main__":
     L = get_largest_eigenvalue(svrg_config["spectral_analysis"]["lambda_eigen"])
     sigma = svrg_with_analytical_solution_comparison()
-    # print("Sigma (gradient noise):", sigma)
     print(estimate_flops_closed_form_and_svrg(n=80000, d=svrg_config["data"]["d"], T_svrg=svrg_config["ridge_regression"]["epochs"],
                                               m=svrg_config["ridge_regression"]["m"],
                                               lam=svrg_config["ridge_regression"]["lambda"]))

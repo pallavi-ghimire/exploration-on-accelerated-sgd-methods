@@ -1,9 +1,7 @@
 import numpy as np
 import pandas as pd
-import math
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import mean_squared_error
 from matplotlib import pyplot as plt
 
 # Configuration dictionary
@@ -22,7 +20,7 @@ svrg_config = {
         "m": 200,
     },
     "plot": {
-        "save_path": "results/svrg/svrg_plot_lambda_1_final.svg"
+        "save_path": "results/svrg/name_of_file.svg"
     }
 }
 
@@ -138,8 +136,6 @@ def get_largest_and_smallest_eigenvalue(lam, w_0, w_k, w_opt):
     return eta, Q, hessian
 
 
-# alpha, Q, hess = get_largest_and_smallest_eigenvalue(svrg_config["svrg"]["lambda"])
-
 def svrg_with_analytical_solution():
     lam = svrg_config["svrg"]["lambda"]
     lr = svrg_config["svrg"]["lr"]
@@ -196,32 +192,8 @@ def svrg_with_analytical_solution():
     axs[2].grid(True)
 
     plt.tight_layout()
-    # plt.savefig("results/svrg/svrg_m_1500_epoch_20_plot.svg", format="svg")
     plt.savefig(svrg_config["plot"]["save_path"], format="svg")
     plt.show()
-
-
-# Optional: still show the plot in the window
-
-
-def tune_lambda_for_svrg():
-    lambda_values = [0.0001, 0.001, 0.01, 0.1, 1, 10]
-    lr = svrg_config["svrg"]["lr"]
-    epochs = svrg_config["svrg"]["epochs"]
-    m = svrg_config["svrg"]["m"]
-
-    results = []
-
-    for lam in lambda_values:
-        w_star = closed_form_solution(X_train, y_train, lam)
-        w, _, _ = svrg_ridge_regression(X_train, y_train, lam, lr, epochs, m, w_star)
-        y_pred = X_test @ w
-        rmse = math.sqrt(mean_squared_error(y_test, y_pred))
-        results.append((lam, rmse))
-
-    best_lambda, best_rmse = min(results, key=lambda x: x[1])
-    print(f"\nBest lambda: {best_lambda}, with RMSE: {best_rmse:.5f}")
-    return best_lambda
 
 
 # === RUN HERE ===
@@ -237,16 +209,6 @@ def estimate_flops_closed_form_and_svrg(n, d, T_svrg, m, lam=0.01):
     Estimate FLOPs for:
     - Closed-form ridge regression
     - SVRG for ridge regression
-
-    Parameters:
-        n (int): Number of training samples
-        d (int): Number of features
-        T_svrg (int): Number of outer epochs in SVRG
-        m (int): Number of inner steps per epoch
-        lam (float): Regularization strength (used only for naming clarity)
-
-    Returns:
-        dict: Estimated FLOPs for both methods
     """
     # === Closed-form ===
     # FLOPs: 2nd^2 + 2nd + 2d^2 + (2/3)d^3
@@ -276,4 +238,11 @@ def estimate_flops_closed_form_and_svrg(n, d, T_svrg, m, lam=0.01):
         "svrg_flops": int(flops_svrg)
     }
 
-print(estimate_flops_closed_form_and_svrg(n=18658, d=5, T_svrg=svrg_config["svrg"]["epochs"], m=svrg_config["svrg"]["m"], lam = svrg_config["svrg"]["lambda"]))
+
+# --------------------------
+# Run
+# --------------------------
+if __name__ == "__main__":
+    svrg_with_analytical_solution()
+    print(estimate_flops_closed_form_and_svrg(n=18658, d=5, T_svrg=svrg_config["svrg"]["epochs"],
+                                              m=svrg_config["svrg"]["m"], lam=svrg_config["svrg"]["lambda"]))
