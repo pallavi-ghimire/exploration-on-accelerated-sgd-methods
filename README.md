@@ -60,10 +60,10 @@ $$
 w_{k+1}=u_k-\alpha\Big(\tfrac{2}{|B|}X_B^\top(X_B u_k-y_B)+2\lambda u_k\Big)\.
 $$
 
-Although the update function is also written for the stochastic version, only the minibatch is used as it aligns with the theory.
+Although the update function is also written for the stochastic version, only the minibatch is used as it aligns with the theory, with batch size B.
 
 In summary, the script 
-(1) runs ASG and ASG-minibatch, saving loss and distance curves and comparing to the closed-form loss; 
+(1) runs ASG-minibatch, saving loss and distance curves and comparing to the closed-form loss; 
 (2) computes FLOPs for closed-form vs. ASG-minibatch to illustrate efficiency; and 
 (3) generates $(\alpha,\beta)$ combinations to generate a Pareto front, keeping only stable pairs with $R_\lambda<1$, and visualizes performance via color maps of $\log(1+\|w-w_{\!*}\|)$ and $R_\lambda$.
 
